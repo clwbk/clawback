@@ -1,0 +1,22 @@
+Ticket OPS-241
+
+Title:
+
+Checkout API retained stale database primary target after failover
+
+Summary:
+
+After an automated primary promotion, `checkout-api` continued sending traffic
+to the previous primary endpoint until the service was restarted.
+
+Resolution:
+
+- roll restart `checkout-api`
+- verify primary target refresh logic
+- create follow-up work to improve post-failover validation
+
+Recommendation from prior incident:
+
+- when this symptom appears again, immediately check for stale primary target
+  before assuming a general database outage
+

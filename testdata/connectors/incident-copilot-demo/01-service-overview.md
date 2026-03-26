@@ -1,0 +1,16 @@
+Service Overview
+
+The Checkout Platform includes:
+
+- `checkout-api` handling customer payment requests
+- `order-worker` processing asynchronous order events
+- `payments-db` storing transaction state
+
+Operational notes:
+
+- `checkout-api` must always point to the current primary database target
+- `order-worker` reads from the replica for non-transactional reconciliation
+- incident follow-up work is tracked in the `OPS` ticket queue
+
+The on-call engineering lead owns Sev 1 and Sev 2 operational incidents.
+
