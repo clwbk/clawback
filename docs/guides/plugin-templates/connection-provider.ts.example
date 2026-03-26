@@ -1,0 +1,51 @@
+import type { ConnectionProviderPluginManifest } from "@clawback/plugin-sdk";
+
+/**
+ * Starter template: Connection Provider
+ *
+ * Copy this file into packages/plugin-manifests/src/connection-providers/
+ * and rename it to match your provider (e.g., hubspot.ts).
+ *
+ * Then export it from packages/plugin-manifests/src/index.ts.
+ */
+export const myProvider: ConnectionProviderPluginManifest = {
+  // Stable ID — once shipped, never change this.
+  id: "provider.my-service.read-only",
+  kind: "connection_provider",
+  version: "1.0.0",
+  displayName: "My Service (Read-Only)",
+  description: "Connects to My Service for read-only data access.",
+  owner: "first_party",
+  // Start as "experimental" until the integration is proven in production.
+  stability: "experimental",
+  // Groups the provider on console surfaces (email | knowledge | project | crm | other).
+  category: "other",
+  // Lower number = appears earlier within its category group.
+  priority: 50,
+
+  // The canonical provider key — must match a ConnectionProvider union member.
+  provider: "my_service",
+  // What access levels this connection supports.
+  accessModes: ["read_only"],
+  // What the connection can do — free-form capability tags.
+  capabilities: ["read_documents"],
+  // Which input route kinds can use this connection.
+  compatibleInputRouteKinds: ["chat"],
+  // How the operator sets up the connection.
+  // "operator_driven" = manual config, "browser_oauth" = OAuth flow.
+  setupMode: "operator_driven",
+  // Env var / secret keys the connection needs at runtime.
+  secretKeys: ["MY_SERVICE_API_KEY"],
+
+  // Setup steps shown in the Setup wizard. Matched by pluginId + stepId.
+  setupSteps: [
+    {
+      id: "my-service-credentials",
+      title: "Configure My Service credentials",
+      description: "Enter and validate the API key for My Service.",
+      ctaLabel: "Set up My Service",
+      operatorOnly: true,
+      target: { surface: "connections", focus: "my_service" },
+    },
+  ],
+};

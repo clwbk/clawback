@@ -1,0 +1,49 @@
+import type { IngressAdapterPluginManifest } from "@clawback/plugin-sdk";
+
+/**
+ * Starter template: Ingress Adapter
+ *
+ * Copy this file into packages/plugin-manifests/src/ingress-adapters/
+ * and rename it to match your adapter (e.g., sendgrid-inbound.ts).
+ *
+ * Then export it from packages/plugin-manifests/src/index.ts.
+ */
+export const myIngressAdapter: IngressAdapterPluginManifest = {
+  // Stable ID — once shipped, never change this.
+  id: "ingress.my-service.inbound",
+  kind: "ingress_adapter",
+  version: "1.0.0",
+  displayName: "My Service Inbound",
+  description: "Normalizes My Service webhooks into Clawback source events.",
+  owner: "first_party",
+  stability: "experimental",
+  category: "other",
+  priority: 50,
+
+  // How the adapter receives events:
+  //   "provider_inbound" = provider pushes to us
+  //   "watch_hook"       = we register a watch with the provider
+  //   "generic_webhook"  = catch-all webhook endpoint
+  adapterKind: "provider_inbound",
+  // Which route kinds this adapter produces after normalization.
+  normalizedInputRouteKinds: ["forward_email"],
+  // How inbound requests are authenticated:
+  //   "shared_token"       = static bearer token
+  //   "provider_signature" = HMAC or signature header
+  //   "oauth_callback"     = OAuth redirect flow
+  authentication: "shared_token",
+  // The external provider this adapter integrates with.
+  provider: "my_service",
+
+  setupSteps: [
+    {
+      id: "my-service-webhook",
+      title: "Configure My Service webhook",
+      description: "Point My Service's outbound webhook at the Clawback ingress endpoint.",
+      ctaLabel: "View setup guide",
+      operatorOnly: true,
+      docsHref: "/docs/admin-guide",
+      target: { surface: "setup" },
+    },
+  ],
+};

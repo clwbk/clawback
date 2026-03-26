@@ -1,0 +1,44 @@
+import type { ActionExecutorPluginManifest } from "@clawback/plugin-sdk";
+
+/**
+ * Starter template: Action Executor
+ *
+ * Copy this file into packages/plugin-manifests/src/action-executors/
+ * and rename it to match your executor (e.g., sendgrid-send.ts).
+ *
+ * Then export it from packages/plugin-manifests/src/index.ts.
+ */
+export const myActionExecutor: ActionExecutorPluginManifest = {
+  // Stable ID — once shipped, never change this.
+  id: "action.my-service-send",
+  kind: "action_executor",
+  version: "1.0.0",
+  displayName: "My Service Send",
+  description: "Executes governed sends through My Service after human review.",
+  owner: "first_party",
+  stability: "experimental",
+  category: "other",
+  priority: 50,
+
+  // Which action kind this executor handles (must match an ActionCapabilityKind).
+  actionKind: "send_email",
+  // Which connection providers can serve as the destination.
+  destinationProviders: ["my_service"],
+  // Default governance level: "ask_me" requires human approval before execution.
+  defaultBoundaryMode: "ask_me",
+  // Currently the only supported model — all actions go through async governance.
+  executionModel: "governed_async",
+  // Env vars / secrets needed at execution time.
+  secretKeys: ["MY_SERVICE_API_KEY", "MY_SERVICE_SENDER_ADDRESS"],
+
+  setupSteps: [
+    {
+      id: "my-service-send-verify",
+      title: "Verify send configuration",
+      description: "Confirm My Service credentials before enabling outbound actions.",
+      ctaLabel: "Configure My Service",
+      operatorOnly: true,
+      target: { surface: "connections", focus: "my_service" },
+    },
+  ],
+};

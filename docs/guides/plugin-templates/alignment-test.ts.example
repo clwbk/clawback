@@ -1,0 +1,54 @@
+import { describe, expect, it } from "vitest";
+
+/**
+ * Starter template: Manifest/Runtime Alignment Test
+ *
+ * Copy this pattern into services/control-plane/src/plugins/manifest-alignment.test.ts
+ * or create a separate test file for your pack.
+ *
+ * These tests catch drift between manifest metadata and runtime pack definitions.
+ * Without them, the install dialog may promise capabilities the runtime does not support.
+ */
+
+// Import your manifest(s) from the plugin-manifests package.
+import { myWorkerPackManifest } from "@clawback/plugin-manifests";
+
+// Import your runtime pack definition.
+import { myWorkerPack } from "../worker-packs/my-worker-pack.js";
+
+describe("my-worker manifest/runtime alignment", () => {
+  // The most critical check: IDs must match or nothing links together.
+  it("workerPackId matches runtime id", () => {
+    expect(myWorkerPack.id).toBe(myWorkerPackManifest.workerPackId);
+  });
+
+  it("worker kind matches", () => {
+    expect(myWorkerPack.kind).toBe(myWorkerPackManifest.workerKind);
+  });
+
+  it("default scope matches", () => {
+    expect(myWorkerPack.defaultScope).toBe(myWorkerPackManifest.defaultScope);
+  });
+
+  it("supported input route kinds match", () => {
+    const runtimeKinds = myWorkerPack.supportedInputRoutes
+      .map((r) => r.kind)
+      .sort();
+    const manifestKinds = [...myWorkerPackManifest.supportedInputRouteKinds].sort();
+    expect(runtimeKinds).toEqual(manifestKinds);
+  });
+
+  it("action kinds match", () => {
+    const runtimeKinds = myWorkerPack.actionCapabilities
+      .map((a) => a.kind)
+      .sort();
+    const manifestKinds = [...myWorkerPackManifest.actionKinds].sort();
+    expect(runtimeKinds).toEqual(manifestKinds);
+  });
+
+  it("output kinds match", () => {
+    const runtimeKinds = [...myWorkerPack.outputKinds].sort();
+    const manifestKinds = [...myWorkerPackManifest.outputKinds].sort();
+    expect(runtimeKinds).toEqual(manifestKinds);
+  });
+});

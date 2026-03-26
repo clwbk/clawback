@@ -1,0 +1,55 @@
+import type { WorkerPackPluginManifest } from "@clawback/plugin-sdk";
+
+/**
+ * Starter template: Worker Pack Manifest
+ *
+ * Copy this file into packages/plugin-manifests/src/worker-packs/
+ * and rename it to match your pack (e.g., research.ts).
+ *
+ * Then export it from packages/plugin-manifests/src/index.ts.
+ *
+ * IMPORTANT: You also need a companion runtime pack definition.
+ * See worker-pack-runtime.ts.example for that side.
+ */
+export const myWorkerPackManifest: WorkerPackPluginManifest = {
+  // Stable ID — once shipped, never change this.
+  id: "worker-pack.my-worker",
+  kind: "worker_pack",
+  version: "1.0.0",
+  displayName: "My Worker",
+  description: "Does something useful when given context via chat or email.",
+  owner: "first_party",
+  stability: "experimental",
+  category: "other",
+  priority: 50,
+
+  // This ID links the manifest to the runtime pack. Must match exactly.
+  workerPackId: "my_worker_v1",
+  // Must match the runtime pack's `kind`. Add to WorkerKind union if new.
+  workerKind: "my_worker",
+  // "shared" = one worker serves the whole workspace. "personal" = per-user.
+  defaultScope: "shared",
+
+  // Which input routes this worker can consume.
+  supportedInputRouteKinds: ["chat", "forward_email"],
+  // What work item types this worker produces.
+  outputKinds: ["email_draft"],
+  // What governed actions this worker can request.
+  actionKinds: ["send_email", "save_work"],
+
+  // Connection providers the worker needs to function.
+  requiredConnectionProviders: ["smtp_relay"],
+  // Providers that enhance the worker but are not mandatory.
+  optionalConnectionProviders: [],
+
+  setupSteps: [
+    {
+      id: "install-my-worker",
+      title: "Install My Worker",
+      description: "Install the worker and assign team members and reviewers.",
+      ctaLabel: "Install worker",
+      operatorOnly: true,
+      target: { surface: "workers", workerKind: "my_worker" },
+    },
+  ],
+};

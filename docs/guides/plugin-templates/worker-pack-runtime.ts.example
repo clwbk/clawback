@@ -1,0 +1,58 @@
+import type { WorkerPackDefinition } from "./types.js";
+
+/**
+ * Starter template: Worker Pack Runtime Definition
+ *
+ * Copy this file into services/control-plane/src/worker-packs/
+ * and rename it to match your pack (e.g., research-pack.ts).
+ *
+ * Then register it in services/control-plane/src/worker-packs/index.ts
+ * and add it to the runtime pack array in the app assembly.
+ *
+ * IMPORTANT: The `id` here must match `workerPackId` in the manifest.
+ * The alignment test will catch any drift between the two.
+ */
+export const myWorkerPack: WorkerPackDefinition = {
+  // Must match the manifest's workerPackId exactly.
+  id: "my_worker_v1",
+  name: "My Worker",
+  // Must match the manifest's workerKind.
+  kind: "my_worker",
+  // Must match the manifest's defaultScope.
+  defaultScope: "shared",
+  summary: "Processes incoming context and produces useful output.",
+
+  // The system prompt is the runtime's core value — keep it focused.
+  systemPrompt: `You are the My Worker assistant for a small business team.
+
+## What you do
+- When given context via chat or forwarded email, you produce a draft response.
+
+## Rules
+- Never send anything without explicit human approval.
+- Keep drafts concise and professional.
+- Flag uncertainty for the reviewer rather than guessing.`,
+
+  // Each entry must have a matching kind in the manifest's supportedInputRouteKinds.
+  supportedInputRoutes: [
+    {
+      kind: "chat",
+      label: "Chat",
+      description: "Direct conversation with the worker.",
+    },
+    {
+      kind: "forward_email",
+      label: "Forward Email",
+      description: "Forward emails for processing.",
+    },
+  ],
+
+  // Must match the manifest's outputKinds.
+  outputKinds: ["email_draft"],
+
+  // Each kind must appear in the manifest's actionKinds.
+  actionCapabilities: [
+    { kind: "send_email", defaultBoundaryMode: "ask_me" },
+    { kind: "save_work", defaultBoundaryMode: "auto" },
+  ],
+};
