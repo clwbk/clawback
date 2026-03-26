@@ -1,0 +1,16 @@
+node_modules
+dist
+.next
+coverage
+.turbo
+.env
+.env.local
+infra/compose/.env
+.runtime
+.playwright
+playwright-report
+test-results
+*.tsbuildinfo
+*-sa-key.json
+.superpowers/
+.claude/worktrees/

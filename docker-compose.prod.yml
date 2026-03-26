@@ -1,0 +1,194 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-clawback}
+      POSTGRES_USER: ${POSTGRES_USER:-clawback}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-clawback} -d ${POSTGRES_DB:-clawback}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+
+  openclaw-init:
+    image: alpine:3.20
+    user: "0:0"
+    command:
+      [
+        "sh",
+        "-lc",
+        "mkdir -p /home/node/.openclaw/workspace /home/node/.openclaw/identity /home/node/.openclaw/canvas /home/node/.openclaw/cron && chown -R 1000:1000 /home/node/.openclaw"
+      ]
+    volumes:
+      - openclaw-config:/home/node/.openclaw
+      - openclaw-workspace:/home/node/.openclaw/workspace
+    restart: "no"
+
+  openclaw:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?OPENCLAW_GATEWAY_TOKEN is required}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+    command:
+      [
+        "node",
+        "dist/index.js",
+        "gateway",
+        "--allow-unconfigured",
+        "--bind",
+        "lan",
+        "--port",
+        "18789"
+      ]
+    healthcheck:
+      test: ["CMD-SHELL", "node dist/index.js health >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      openclaw-init:
+        condition: service_completed_successfully
+    volumes:
+      - openclaw-config:/home/node/.openclaw
+      - openclaw-workspace:/home/node/.openclaw/workspace
+      - ./infra/openclaw/openclaw.prod.json:/home/node/.openclaw/openclaw.json:ro
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: services/control-plane/Dockerfile
+      target: builder
+    command: ["node", "packages/db/dist/migrate.js"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-clawback}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-clawback}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  control-plane:
+    build:
+      context: .
+      dockerfile: services/control-plane/Dockerfile
+    environment:
+      NODE_ENV: production
+      CONTROL_PLANE_PORT: "3001"
+      DATABASE_URL: postgres://${POSTGRES_USER:-clawback}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-clawback}
+      COOKIE_SECRET: ${COOKIE_SECRET:?COOKIE_SECRET is required}
+      CLAWBACK_RUNTIME_API_TOKEN: ${CLAWBACK_RUNTIME_API_TOKEN:?CLAWBACK_RUNTIME_API_TOKEN is required}
+      CLAWBACK_INBOUND_EMAIL_WEBHOOK_TOKEN: ${CLAWBACK_INBOUND_EMAIL_WEBHOOK_TOKEN:-}
+      CLAWBACK_GMAIL_WATCH_HOOK_TOKEN: ${CLAWBACK_GMAIL_WATCH_HOOK_TOKEN:-}
+      CLAWBACK_GMAIL_POLLING_ENABLED: ${CLAWBACK_GMAIL_POLLING_ENABLED:-true}
+      CLAWBACK_GMAIL_POLL_INTERVAL_MS: ${CLAWBACK_GMAIL_POLL_INTERVAL_MS:-60000}
+      CLAWBACK_APPROVAL_SURFACE_SECRET: ${CLAWBACK_APPROVAL_SURFACE_SECRET:?CLAWBACK_APPROVAL_SURFACE_SECRET is required}
+      OPENCLAW_GATEWAY_URL: ws://openclaw:18789
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?}
+      OPENCLAW_HOST_CONFIG_ROOT: /runtime/openclaw/config
+      OPENCLAW_HOST_WORKSPACE_ROOT: /runtime/openclaw/workspace/clawback
+      OPENCLAW_STATE_DIR: /runtime/openclaw/config/client-state
+      OPENCLAW_RUNTIME_WORKSPACE_ROOT: /home/node/.openclaw/workspace/clawback
+      CONSOLE_ORIGIN: ${CONSOLE_ORIGIN:-http://localhost:3000}
+      CLAWBACK_SMTP_HOST: ${CLAWBACK_SMTP_HOST:-}
+      CLAWBACK_SMTP_PORT: ${CLAWBACK_SMTP_PORT:-587}
+      CLAWBACK_SMTP_FROM_ADDRESS: ${CLAWBACK_SMTP_FROM_ADDRESS:-}
+      CLAWBACK_SMTP_FROM_NAME: ${CLAWBACK_SMTP_FROM_NAME:-}
+      CLAWBACK_SMTP_USERNAME: ${CLAWBACK_SMTP_USERNAME:-}
+      CLAWBACK_SMTP_PASSWORD: ${CLAWBACK_SMTP_PASSWORD:-}
+      CLAWBACK_SMTP_REPLY_TO: ${CLAWBACK_SMTP_REPLY_TO:-}
+      CLAWBACK_SMTP_SECURE: ${CLAWBACK_SMTP_SECURE:-false}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+      WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
+    ports:
+      - "${CONTROL_PLANE_PORT:-3001}:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      openclaw:
+        condition: service_healthy
+    volumes:
+      - openclaw-config:/runtime/openclaw/config
+      - openclaw-workspace:/runtime/openclaw/workspace
+      - ./infra/openclaw/openclaw.prod.json:/runtime/openclaw/config/openclaw.json:ro
+    restart: unless-stopped
+
+  runtime-worker:
+    build:
+      context: .
+      dockerfile: services/runtime-worker/Dockerfile
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER:-clawback}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-clawback}
+      OPENCLAW_GATEWAY_URL: ws://openclaw:18789
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?}
+      CLAWBACK_RUNTIME_WORKER_STATUS_DIR: /tmp/runtime-worker
+      OPENCLAW_HOST_CONFIG_ROOT: /runtime/openclaw/config
+      OPENCLAW_HOST_WORKSPACE_ROOT: /runtime/openclaw/workspace/clawback
+      OPENCLAW_STATE_DIR: /runtime/openclaw/config/client-state
+      OPENCLAW_RUNTIME_WORKSPACE_ROOT: /home/node/.openclaw/workspace/clawback
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      openclaw:
+        condition: service_healthy
+    volumes:
+      - openclaw-config:/runtime/openclaw/config
+      - openclaw-workspace:/runtime/openclaw/workspace
+      - ./infra/openclaw/openclaw.prod.json:/runtime/openclaw/config/openclaw.json:ro
+    restart: unless-stopped
+
+  console:
+    build:
+      context: .
+      dockerfile: apps/console/Dockerfile
+    environment:
+      NODE_ENV: production
+      CONTROL_PLANE_INTERNAL_URL: ${CONTROL_PLANE_INTERNAL_URL:-http://control-plane:3001}
+    ports:
+      - "${CONSOLE_PORT:-3000}:3000"
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  minio-data:
+  openclaw-config:
+  openclaw-workspace:

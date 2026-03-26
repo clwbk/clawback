@@ -1,0 +1,18 @@
+{
+  "id": "clawback-tools",
+  "name": "Clawback Tools",
+  "description": "Clawback Incident Copilot ticket tools",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "controlPlaneBaseUrl": {
+        "type": "string"
+      },
+      "runtimeApiToken": {
+        "type": "string"
+      }
+    },
+    "required": ["controlPlaneBaseUrl", "runtimeApiToken"]
+  }
+}

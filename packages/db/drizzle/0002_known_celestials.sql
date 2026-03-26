@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "agent_versions_one_draft_per_agent_key" ON "agent_versions" USING btree ("agent_id") WHERE "agent_versions"."status" = 'draft';--> statement-breakpoint
+CREATE UNIQUE INDEX "agent_versions_one_published_per_agent_key" ON "agent_versions" USING btree ("agent_id") WHERE "agent_versions"."status" = 'published';

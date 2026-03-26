@@ -1,0 +1,4 @@
+CREATE INDEX "document_chunks_workspace_connector_idx" ON "document_chunks" USING btree ("workspace_id","connector_id");--> statement-breakpoint
+CREATE INDEX "document_chunks_workspace_connector_document_version_idx" ON "document_chunks" USING btree ("workspace_id","connector_id","document_id","document_version_id");--> statement-breakpoint
+CREATE INDEX "documents_workspace_connector_idx" ON "documents" USING btree ("workspace_id","connector_id");--> statement-breakpoint
+CREATE INDEX "documents_workspace_connector_current_version_idx" ON "documents" USING btree ("workspace_id","connector_id","current_version_id");

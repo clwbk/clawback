@@ -1,0 +1,1 @@
+ALTER TABLE "connections" ADD COLUMN "config_json" jsonb DEFAULT '{}'::jsonb NOT NULL;
