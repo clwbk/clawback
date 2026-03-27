@@ -7,14 +7,12 @@
  * This is a shared platform service — NOT a helper hidden in the Gmail
  * poller or a worker-specific module.
  *
- * Resolution precedence (from R0 freeze):
+ * Resolution precedence:
  *   1. Exact contact email match
  *   2. Linked contact → account
  *   3. Account domain match
  *   4. Workspace internal-domain hint
  *   5. Heuristic fallback (current triage defaults)
- *
- * @see docs/implementation/relationship-memory-r0-freeze.md
  */
 
 import type { SenderResolution, RelationshipClass, ResolutionMethod } from "@clawback/contracts";

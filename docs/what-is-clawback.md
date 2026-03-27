@@ -171,7 +171,7 @@ without either of them becoming the product's source of business truth.
 If you want to try Clawback locally:
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/clwbk/clawback.git
 cd clawback
 pnpm install
 ./scripts/start-local.sh

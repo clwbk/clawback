@@ -12,7 +12,6 @@
  *   - deprecate before removing
  *
  * @see docs/architecture/worker-decision-model.md
- * @see docs/implementation/email-triage-and-response-policy.md
  */
 
 import { z } from "zod";

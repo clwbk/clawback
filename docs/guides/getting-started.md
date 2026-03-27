@@ -41,7 +41,7 @@ Clawback can start without Gmail, SMTP, or Slack. Gmail is optional for first va
 ### 1. Clone and install
 
 ```bash
-git clone <repo-url> clawback
+git clone https://github.com/clwbk/clawback.git clawback
 cd clawback
 pnpm install
 ```

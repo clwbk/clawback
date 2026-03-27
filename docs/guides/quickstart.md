@@ -12,7 +12,7 @@ Zero to a working local Clawback stack in a few minutes.
 ## Start the stack
 
 ```bash
-git clone <repo-url> clawback
+git clone https://github.com/clwbk/clawback.git clawback
 cd clawback
 pnpm install
 ./scripts/start-local.sh

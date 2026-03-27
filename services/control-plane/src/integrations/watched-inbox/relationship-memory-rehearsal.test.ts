@@ -10,9 +10,6 @@
  *
  * These tests wire the full pipeline: sender resolution -> triage -> output mapping.
  * They use in-memory stores to verify end-to-end behavior.
- *
- * @see docs/implementation/relationship-memory-r0-r3-task-graph.md (R5)
- * @see docs/implementation/relationship-memory-r0-freeze.md
  */
 import { describe, expect, it } from "vitest";
 import type { WorkerKind } from "@clawback/contracts";

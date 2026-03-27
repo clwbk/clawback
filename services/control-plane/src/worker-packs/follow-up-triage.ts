@@ -6,7 +6,6 @@
  * X2 builds an explicit native execution progression on top of these
  * steps without turning them into a generic workflow engine.
  *
- * @see docs/implementation/email-triage-and-response-policy.md
  * @see docs/architecture/worker-decision-model.md
  */
 
@@ -356,7 +355,7 @@ function hasSignals(text: string, signals: string[], threshold: number): boolean
 // ---------------------------------------------------------------------------
 // Step 3: Policy table — relationship × intent → decision
 // ---------------------------------------------------------------------------
-// Based on docs/implementation/email-triage-and-response-policy.md
+// Policy table for relationship × intent decisions.
 
 type PolicyResult = {
   decision: DecisionKind;
