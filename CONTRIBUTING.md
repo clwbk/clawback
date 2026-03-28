@@ -4,16 +4,18 @@ Thanks for contributing.
 
 ## Before You Start
 
-Clawback is planning-first and contract-sensitive. Read these first:
+If you are fixing a bug, improving docs, or trying the product locally, start
+with:
 
-1. `docs/what-is-clawback.md`
-2. `docs/beta/public-tryability-milestone.md`
-3. `docs/beta/0.4-signoff-2026-03-26.md`
-4. `docs/guides/getting-started.md`
+1. `README.md`
+2. `docs/guides/getting-started.md`
+3. `docs/guides/verification-and-testing.md`
 
-For architectural work, also read:
+If you are changing product contracts, deployment assumptions, or worker/plugin
+boundaries, also read:
 
-- `README.md`
+- `docs/beta/public-tryability-milestone.md`
+- `docs/beta/0.4-signoff-2026-03-26.md`
 - `docs/guides/plugins-and-providers.md`
 - `docs/guides/plugin-development.md`
 
@@ -23,12 +25,18 @@ Install and start the local stack:
 
 ```bash
 pnpm install
-pnpm compose:up:core
-pnpm openclaw:dev
-pnpm dev
+./scripts/start-local.sh
 ```
 
 Then open `http://localhost:3000/setup`.
+
+If you prefer to run the stack in smaller pieces while developing:
+
+```bash
+pnpm compose:up
+pnpm db:migrate
+pnpm dev
+```
 
 If you want seeded demo data:
 

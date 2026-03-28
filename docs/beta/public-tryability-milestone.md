@@ -2,14 +2,15 @@
 
 ## Goal
 
-Turn the current internal alpha into a publicly tryable self-hosted OSS beta
-without reintroducing product drift.
+Turn Clawback into a publicly tryable self-hosted OSS beta without overclaiming
+what it can do.
 
 This milestone is about:
 
 - whether strangers can install and run the product
-- whether the first product story works without founder-only context
-- whether the contract layer is stable enough for fast parallel hardening
+- whether the first product story works without private operator context
+- whether the supported deployment and verification path are stable enough to
+  publish openly
 
 Read this with:
 
@@ -34,7 +35,8 @@ Status, 2026-03-26:
 This milestone is complete when Clawback can be put in front of real outside
 users and honestly claim:
 
-- one person can deploy the supported self-hosted stack without developer-only tribal knowledge
+- one person can deploy the supported self-hosted stack without undocumented
+  operator knowledge
 - the product has a no-trust path for trying it before Google setup
 - one connected Gmail path exists and is honest about self-hosted constraints
 - one reviewed outbound action can perform a real external side effect
@@ -47,7 +49,7 @@ It is **not** complete when:
 - public users must set up Google before they can experience value
 - docs overclaim what Gmail, send, or deployment can do
 - approval still only advances Clawback state with no real external effect
-- packaging, security, or recovery are still founder-only knowledge
+- packaging, security, or recovery still depend on private operator knowledge
 
 ## Frozen Product Choices
 
@@ -202,16 +204,7 @@ Do not let this milestone expand into:
 - generalized workflow-builder product scope
 - full GA/launch hardening beyond the documented beta bar
 
-## Required Serial Freeze Before Parallel Work
+## Public Authority
 
-Before broad parallel implementation, one owner must freeze:
-
-- the public beta claim
-- the product contract layer
-- the provider/plugin boundary
-- the deployment/support contract
-- the acceptance checklist
-
-The internal freeze and execution-map documents were used to reach this state.
-For the public repo, treat this milestone plus the final signoff and verification
-guides as the authoritative `0.4` path.
+For the public repo, treat this milestone plus the final signoff and
+verification guides as the authoritative `0.4` path.

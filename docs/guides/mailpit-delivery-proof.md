@@ -13,8 +13,8 @@ captures all outbound email and displays it in a web UI. Nothing leaves your
 machine. You send to it on port 1025, and read what arrived at
 `http://localhost:8025`.
 
-This is the recommended way to satisfy Run B of the
-[reviewed-send acceptance checklist](../beta/g-reviewed-send-acceptance-checklist.md).
+This is the recommended way to verify the SMTP-present reviewed-send path
+described in the [0.4 signoff](../beta/0.4-signoff-2026-03-26.md).
 
 ## Quick Path (Single Command)
 
@@ -169,6 +169,6 @@ MailHog is no longer actively maintained; Mailpit is the recommended choice.
 
 ## See Also
 
-- [Reviewed-Send Acceptance Checklist](../beta/g-reviewed-send-acceptance-checklist.md)
+- [0.4 Signoff](../beta/0.4-signoff-2026-03-26.md)
 - [Deployment Guide — SMTP section](./deployment.md#smtp)
 - [Verification and Testing](./verification-and-testing.md)

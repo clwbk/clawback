@@ -166,7 +166,9 @@ What they prove:
 - retrieval-backed answers can be grounded in synced content
 - a governed action can still run on top of that retrieval-backed worker flow
 
-Read [Public Try Retrieval Smoke Eval](../evaluation/public-try-retrieval-eval.md) for the limits of what this smoke evidence does and does not prove.
+Read [0.4 Beta Current Limitations](../beta/0.4-current-limitations.md) and
+[0.4 Signoff](../beta/0.4-signoff-2026-03-26.md) for the current retrieval
+claim and its limits.
 
 ## Script Reference
 
@@ -263,4 +265,5 @@ What these add:
 - [Deployment Guide](./deployment.md)
 - [Troubleshooting](./troubleshooting.md)
 - [Known Limitations](./known-limitations.md)
-- [Public Try Retrieval Smoke Eval](../evaluation/public-try-retrieval-eval.md)
+- [0.4 Beta Current Limitations](../beta/0.4-current-limitations.md)
+- [0.4 Signoff](../beta/0.4-signoff-2026-03-26.md)

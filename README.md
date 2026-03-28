@@ -65,9 +65,9 @@ This is runtime mediation — and no other tool in this space does it.
 - **Team leads** who want visibility into what AI is doing on behalf of
   their team
 
-## Quick Start (Local Development)
+## Try Clawback Locally
 
-> **Want the TL;DR?** See the [Quickstart Guide](docs/guides/quickstart.md) — zero to running in under 5 minutes.
+Start with the evaluator path:
 
 ```bash
 git clone https://github.com/clwbk/clawback.git clawback
@@ -77,15 +77,24 @@ pnpm install                # install dependencies
 pnpm smoke:public-try       # run the main public verification flow
 ```
 
-Or step by step:
+Then open `http://localhost:3000/setup` to create the first admin account.
+
+If you want the guided walkthrough instead of the short path, start with:
+
+- [Quickstart Guide](docs/guides/quickstart.md)
+- [Deployment Guide](docs/guides/deployment.md)
+- [Verification and Testing](docs/guides/verification-and-testing.md)
+
+## Contribute Locally
+
+If you are developing on the repo rather than just evaluating it, the same
+stack can be started in smaller pieces:
 
 ```bash
 pnpm compose:up             # Docker: Postgres, MinIO, OpenClaw
 pnpm db:migrate             # run database migrations
 pnpm dev                    # start console (3000) + control-plane (3001) + runtime worker
 ```
-
-Then open `http://localhost:3000/setup` to create the first admin account.
 
 ### Test Credentials
 
@@ -116,22 +125,26 @@ Docker configuration, and runtime setup.
 
 ## Documentation
 
-- [`docs/what-is-clawback.md`](docs/what-is-clawback.md) — Product overview
-  (non-technical, shareable)
-- [`docs/beta/public-tryability-milestone.md`](docs/beta/public-tryability-milestone.md) — Current
-  public beta scope
-- [`docs/beta/0.4-signoff-2026-03-26.md`](docs/beta/0.4-signoff-2026-03-26.md) — Current beta
-  signoff
-- [`docs/guides/getting-started.md`](docs/guides/getting-started.md) — First
-  walkthrough
-- [`docs/guides/admin-guide.md`](docs/guides/admin-guide.md) — Workspace admin
-  guide
-- [`docs/guides/verification-and-testing.md`](docs/guides/verification-and-testing.md) — Smoke tests and verification
-- [`docs/guides/known-limitations.md`](docs/guides/known-limitations.md) — Honest current limits
-- [`docs/guides/deployment.md`](docs/guides/deployment.md) — Production
-  deployment
-- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — Contribution guide
-- [`SECURITY.md`](./SECURITY.md) — Security reporting guidance
+If you are trying the product:
+
+- [`docs/guides/quickstart.md`](docs/guides/quickstart.md) — fastest local path
+- [`docs/guides/deployment.md`](docs/guides/deployment.md) — supported single-node deployment
+- [`docs/guides/verification-and-testing.md`](docs/guides/verification-and-testing.md) — smoke tests and verification
+- [`docs/guides/known-limitations.md`](docs/guides/known-limitations.md) — honest current limits
+- [`docs/beta/0.4-signoff-2026-03-26.md`](docs/beta/0.4-signoff-2026-03-26.md) — what the current beta claim does and does not prove
+
+If you are contributing:
+
+- [`docs/guides/getting-started.md`](docs/guides/getting-started.md) — first contributor walkthrough
+- [`docs/guides/plugin-development.md`](docs/guides/plugin-development.md) — plugin and provider extension guide
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — contribution guide
+- [`SECURITY.md`](./SECURITY.md) — security reporting guidance
+
+Reference docs:
+
+- [`docs/what-is-clawback.md`](docs/what-is-clawback.md) — product overview
+- [`docs/beta/public-tryability-milestone.md`](docs/beta/public-tryability-milestone.md) — current beta scope
+- [`docs/guides/admin-guide.md`](docs/guides/admin-guide.md) — workspace admin guide
 - [`LICENSE`](./LICENSE) — MIT license
 
 ## Architecture
