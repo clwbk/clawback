@@ -132,7 +132,7 @@ services:
       WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
       WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
     ports:
-      - "${CONTROL_PLANE_PORT:-3001}:3001"
+      - "127.0.0.1:${CONTROL_PLANE_PORT:-3001}:3001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -181,10 +181,31 @@ services:
       NODE_ENV: production
       CONTROL_PLANE_INTERNAL_URL: ${CONTROL_PLANE_INTERNAL_URL:-http://control-plane:3001}
     ports:
-      - "${CONSOLE_PORT:-3000}:3000"
+      - "127.0.0.1:${CONSOLE_PORT:-3000}:3000"
     depends_on:
       control-plane:
         condition: service_healthy
+    restart: unless-stopped
+
+  # -- Reverse proxy (TLS termination) --
+  # Caddy automatically obtains and renews Let's Encrypt certificates.
+  # Set CLAWBACK_DOMAIN in .env to your public hostname.
+  # To skip TLS (e.g. behind another LB), comment out this service and
+  # remove the 127.0.0.1 bind restriction on the console port above.
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      CLAWBACK_DOMAIN: ${CLAWBACK_DOMAIN:?CLAWBACK_DOMAIN is required (e.g. clawback.example.com)}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3 (QUIC)
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - console
     restart: unless-stopped
 
 volumes:
@@ -192,3 +213,5 @@ volumes:
   minio-data:
   openclaw-config:
   openclaw-workspace:
+  caddy-data:
+  caddy-config:

@@ -1,6 +1,6 @@
 # Getting Started with Clawback
 
-How to run Clawback locally, understand the current product shape, and get to first value without relying on founder memory.
+How to run Clawback locally, understand the current product shape, and get to first value.
 
 **Audience:** Admins, evaluators, and contributors setting up Clawback for the first time.
 
@@ -61,6 +61,9 @@ New workers can be installed without this, but runtime execution will fail once 
 ```
 
 This starts Postgres, MinIO, OpenClaw, the control plane, the runtime worker, and the console.
+If a sibling `../openclaw` checkout is present, Clawback uses it for the
+gateway; otherwise the script falls back to the repo-contained Docker OpenClaw
+service automatically.
 
 ### 4. Bootstrap the first admin
 

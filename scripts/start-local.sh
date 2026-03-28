@@ -45,6 +45,15 @@ load_env_file ".env.local"
 load_env_file ".env"
 load_env_file "infra/compose/.env"
 
+OPENCLAW_REPO_DIR="${OPENCLAW_REPO_DIR:-$(pwd)/../openclaw}"
+if [ -n "${CLAWBACK_LOCAL_OPENCLAW_MODE:-}" ]; then
+  CLAWBACK_LOCAL_OPENCLAW_MODE="${CLAWBACK_LOCAL_OPENCLAW_MODE}"
+elif [ -f "${OPENCLAW_REPO_DIR}/openclaw.mjs" ]; then
+  CLAWBACK_LOCAL_OPENCLAW_MODE="host"
+else
+  CLAWBACK_LOCAL_OPENCLAW_MODE="docker"
+fi
+
 if [ -z "${CONTROL_PLANE_PORT:-}" ] || [ "${CONTROL_PLANE_PORT}" = "3001" ]; then
   CONTROL_PLANE_PORT=3011
 fi
@@ -65,7 +74,7 @@ export OPENCLAW_GATEWAY_URL
 export OPENCLAW_GATEWAY_TOKEN
 export NEXT_PUBLIC_CONTROL_PLANE_URL="http://localhost:${CONTROL_PLANE_PORT}"
 export CONSOLE_ORIGIN="http://localhost:${CONSOLE_PORT}"
-export CLAWBACK_LOCAL_OPENCLAW_MODE="host"
+export CLAWBACK_LOCAL_OPENCLAW_MODE
 
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${BLUE}  Clawback Local Development${NC}"
@@ -90,9 +99,15 @@ fi
 # ── Start infrastructure ─────────────────────────────────────────────
 
 if [ "$SKIP_INFRA" = false ]; then
-  step "Starting infrastructure (Postgres, MinIO)"
-  pnpm compose:up:core 2>&1 | tail -3
-  ok "Core Docker containers up"
+  if [ "${CLAWBACK_LOCAL_OPENCLAW_MODE}" = "host" ]; then
+    step "Starting infrastructure (Postgres, MinIO)"
+    pnpm compose:up:core 2>&1 | tail -3
+    ok "Core Docker containers up"
+  else
+    step "Starting infrastructure (Postgres, MinIO, OpenClaw)"
+    pnpm compose:up 2>&1 | tail -4
+    ok "Full Docker stack up"
+  fi
 else
   step "Skipping infrastructure (--skip-infra)"
 fi
@@ -129,36 +144,41 @@ for port in "$CONSOLE_PORT" "$CONTROL_PLANE_PORT"; do
 done
 sleep 1
 
-# ── Start host OpenClaw gateway ──────────────────────────────────────
+if [ "${CLAWBACK_LOCAL_OPENCLAW_MODE}" = "host" ]; then
+  # ── Start host OpenClaw gateway ────────────────────────────────────
 
-step "Starting host OpenClaw gateway"
-./scripts/run-host-openclaw.sh --stop >/dev/null 2>&1 || true
-HOST_OPENCLAW_LOG_FILE=".runtime/openclaw/host-gateway.log"
-: > "$HOST_OPENCLAW_LOG_FILE"
-./scripts/run-host-openclaw.sh >>"$HOST_OPENCLAW_LOG_FILE" 2>&1 &
-HOST_OPENCLAW_PID=$!
-for i in $(seq 1 50); do
-  if lsof -ti :"$OPENCLAW_GATEWAY_PORT" >/dev/null 2>&1; then
-    break
+  step "Starting host OpenClaw gateway"
+  ./scripts/run-host-openclaw.sh --stop >/dev/null 2>&1 || true
+  HOST_OPENCLAW_LOG_FILE=".runtime/openclaw/host-gateway.log"
+  : > "$HOST_OPENCLAW_LOG_FILE"
+  ./scripts/run-host-openclaw.sh >>"$HOST_OPENCLAW_LOG_FILE" 2>&1 &
+  HOST_OPENCLAW_PID=$!
+  for i in $(seq 1 50); do
+    if lsof -ti :"$OPENCLAW_GATEWAY_PORT" >/dev/null 2>&1; then
+      break
+    fi
+    if ! kill -0 "$HOST_OPENCLAW_PID" 2>/dev/null; then
+      fail "Host OpenClaw gateway failed to start. See $HOST_OPENCLAW_LOG_FILE"
+    fi
+    sleep 0.2
+  done
+  if ! lsof -ti :"$OPENCLAW_GATEWAY_PORT" >/dev/null 2>&1; then
+    fail "Host OpenClaw gateway did not bind port $OPENCLAW_GATEWAY_PORT in time. See $HOST_OPENCLAW_LOG_FILE"
   fi
-  if ! kill -0 "$HOST_OPENCLAW_PID" 2>/dev/null; then
-    fail "Host OpenClaw gateway failed to start. See $HOST_OPENCLAW_LOG_FILE"
-  fi
-  sleep 0.2
-done
-if ! lsof -ti :"$OPENCLAW_GATEWAY_PORT" >/dev/null 2>&1; then
-  fail "Host OpenClaw gateway did not bind port $OPENCLAW_GATEWAY_PORT in time. See $HOST_OPENCLAW_LOG_FILE"
+  ok "Host OpenClaw gateway running on port $OPENCLAW_GATEWAY_PORT"
+
+  cleanup() {
+    if [ -n "${HOST_OPENCLAW_PID:-}" ]; then
+      kill "$HOST_OPENCLAW_PID" 2>/dev/null || true
+      wait "$HOST_OPENCLAW_PID" 2>/dev/null || true
+    fi
+  }
+
+  trap cleanup EXIT INT TERM
+else
+  step "Using Docker OpenClaw runtime"
+  ok "OpenClaw container available on port $OPENCLAW_GATEWAY_PORT"
 fi
-ok "Host OpenClaw gateway running on port $OPENCLAW_GATEWAY_PORT"
-
-cleanup() {
-  if [ -n "${HOST_OPENCLAW_PID:-}" ]; then
-    kill "$HOST_OPENCLAW_PID" 2>/dev/null || true
-    wait "$HOST_OPENCLAW_PID" 2>/dev/null || true
-  fi
-}
-
-trap cleanup EXIT INT TERM
 
 # ── Start all services ───────────────────────────────────────────────
 
@@ -166,7 +186,11 @@ step "Starting services (console, control-plane, runtime-worker)"
 echo ""
 echo -e "  ${GREEN}Console:${NC}        http://localhost:${CONSOLE_PORT}"
 echo -e "  ${GREEN}Control-plane:${NC}  http://localhost:${CONTROL_PLANE_PORT}"
-echo -e "  ${GREEN}OpenClaw gateway:${NC} ws://127.0.0.1:${OPENCLAW_GATEWAY_PORT}"
+if [ "${CLAWBACK_LOCAL_OPENCLAW_MODE}" = "host" ]; then
+  echo -e "  ${GREEN}OpenClaw gateway:${NC} ws://127.0.0.1:${OPENCLAW_GATEWAY_PORT} (host)"
+else
+  echo -e "  ${GREEN}OpenClaw gateway:${NC} ws://127.0.0.1:${OPENCLAW_GATEWAY_PORT} (docker)"
+fi
 echo ""
 
 # Check bootstrap status after services start

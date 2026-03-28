@@ -5,7 +5,9 @@ coverage
 .turbo
 .env
 .env.local
+.env.hetzner
 infra/compose/.env
+infra/hetzner/.env.local
 .runtime
 .playwright
 playwright-report

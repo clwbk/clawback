@@ -2,8 +2,8 @@
 
 Field-level reference for every plugin manifest type in Clawback. Use this when you need to know exactly what a field does, what values it accepts, and how the system uses it.
 
-For concepts and workflow, read [Writing Plugins](./plugin-authoring.md).
-For recipes, read [Plugin Cookbook](./plugin-cookbook.md).
+For concepts and workflow, read [Plugin Development Guide](./plugin-development.md).
+For the provider model overview, read [Plugins & Providers](./plugins-and-providers.md).
 
 ---
 
@@ -528,8 +528,6 @@ registerPanelPropsResolver("provider.my-provider", (ctx) => {
 
 ## Related Docs
 
-- [Writing Plugins](./plugin-authoring.md) -- concepts and workflow
-- [Plugin Cookbook](./plugin-cookbook.md) -- step-by-step recipes
+- [Plugin Development Guide](./plugin-development.md) -- concepts and workflow
 - [Plugins & Providers](./plugins-and-providers.md) -- provider model overview
-- [Plugin Operator Lifecycle And Doctor](../architecture/plugin-operator-lifecycle-and-doctor.md) -- required contract for real operator-managed providers
 - [API Reference](./api-reference.md) -- HTTP API endpoints

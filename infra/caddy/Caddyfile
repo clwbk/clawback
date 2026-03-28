@@ -1,0 +1,21 @@
+# Caddyfile — single-node reverse proxy for Clawback
+#
+# Caddy obtains and renews TLS certificates automatically via ACME (Let's
+# Encrypt) as long as the domain's DNS A record points to this host and ports
+# 80/443 are reachable from the internet.
+#
+# Environment variables are injected by docker-compose.prod.yml:
+#   CLAWBACK_DOMAIN  — the public hostname (e.g. clawback.example.com)
+
+{$CLAWBACK_DOMAIN} {
+	# Console — public entrypoint.
+	# The console already proxies /api/* to the control plane internally via
+	# CONTROL_PLANE_INTERNAL_URL, so we only need to route everything here.
+	reverse_proxy console:3000
+
+	# SSE streams (used by useRunStream) need unbuffered responses.
+	@sse path /api/runs/*/stream
+	reverse_proxy @sse console:3000 {
+		flush_interval -1
+	}
+}

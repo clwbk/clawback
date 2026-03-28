@@ -57,6 +57,8 @@ OPENCLAW_ENTRYPOINT="$OPENCLAW_REPO_DIR/openclaw.mjs"
 
 if [ ! -f "$OPENCLAW_ENTRYPOINT" ]; then
   echo "OpenClaw repo entrypoint not found at $OPENCLAW_ENTRYPOINT" >&2
+  echo "For the public repo path, prefer ./scripts/start-local.sh, which falls back to Docker OpenClaw automatically." >&2
+  echo "To use host-run OpenClaw explicitly, clone the OpenClaw repo as ../openclaw or set OPENCLAW_REPO_DIR." >&2
   exit 1
 fi
 

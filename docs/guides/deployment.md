@@ -25,6 +25,7 @@ The production packaging currently lives in:
 - `services/control-plane/Dockerfile`
 - `services/runtime-worker/Dockerfile`
 - `apps/console/Dockerfile`
+- `infra/caddy/Caddyfile`
 
 The stack includes:
 
@@ -35,6 +36,7 @@ The stack includes:
 - `control-plane`
 - `runtime-worker`
 - `console`
+- `caddy` (TLS reverse proxy)
 
 ## 1. Prepare Environment Variables
 
@@ -54,6 +56,7 @@ At minimum, set strong values for:
 - `CLAWBACK_RUNTIME_API_TOKEN`
 - `CLAWBACK_APPROVAL_SURFACE_SECRET`
 - `CONSOLE_ORIGIN`
+- `CLAWBACK_DOMAIN`
 
 For the provided Compose file, keep:
 
@@ -117,6 +120,39 @@ Check logs if anything looks wrong:
 docker compose -f docker-compose.prod.yml logs -f control-plane console runtime-worker
 ```
 
+## Fresh VM Rehearsal
+
+If you want to prove the current single-node deployment path on a fresh
+Ubuntu/Debian VM before doing a real rollout, use the remote rehearsal script
+from your local checkout:
+
+```bash
+./scripts/test-remote-stack.sh --host root@<vm-ip>
+```
+
+If you are using Hetzner Cloud specifically, you can also provision the
+rehearsal VM from your local machine first:
+
+```bash
+HCLOUD_TOKEN=... ./scripts/provision-hetzner-rehearsal.sh
+```
+
+This bootstraps Docker on the remote host, syncs the current repo snapshot, and
+runs the existing deployed-stack acceptance flow there.
+
+What it proves:
+
+- the host can be prepared for the supported Compose deployment
+- the production stack builds and reaches health on a fresh VM
+- seeding and the no-Google public-try path still pass remotely
+
+What it does not prove:
+
+- TLS / reverse proxy (Caddy is in the compose file but needs a real domain)
+- SMTP-backed reviewed-send delivery
+- Gmail-connected acceptance
+- persistent deployment with a retained `.env`
+
 ## 5. Verify the Control Plane
 
 From the host or a trusted internal network path:
@@ -131,44 +167,98 @@ Expected:
 - `/healthz` returns `200`
 - `/readyz` returns `200` once Postgres and PgBoss are ready
 
-## 6. Expose the Console
+## 6. TLS and Reverse Proxy
 
-The recommended public entrypoint is the console on port `3000`, placed behind a reverse proxy or load balancer.
+The production compose file includes a Caddy reverse proxy that terminates TLS
+automatically via Let's Encrypt. This is the recommended path for single-node
+deployments.
 
-Recommended public pattern:
+### Why Caddy
 
-- expose the console publicly
-- keep the control plane internal
-- route webhook and browser `/api/*` traffic through the console's built-in proxy
+Caddy was chosen over nginx for this deployment shape because:
 
-This works because the console forwards `/api/...` requests to the control plane using `CONTROL_PLANE_INTERNAL_URL`.
+- Automatic ACME certificate provisioning and renewal with zero extra config
+- No certbot sidecar, no cron jobs, no manual cert-path plumbing
+- Minimal config surface (~10 lines vs ~40 for nginx + certbot)
+- HTTP-to-HTTPS redirect is automatic
 
-## 7. Reverse Proxy Example
+The only requirement is that the host's DNS A record points to the VM and ports
+80/443 are reachable from the internet.
 
-Minimal nginx example:
+### Architecture
 
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name clawback.example.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-}
+```
+Internet -> :443 (Caddy, TLS) -> console:3000 -> control-plane:3001
+                                  (internal Docker network)
 ```
 
-Set:
+- Caddy is the only service bound to public ports (80 and 443)
+- The console and control-plane ports are bound to `127.0.0.1` only
+- The console already proxies `/api/*` to the control plane internally via
+  `CONTROL_PLANE_INTERNAL_URL`, so Caddy only needs to reach the console
+- SSE streams (`/api/runs/*/stream`) are handled with unbuffered flushing
+
+### Setup
+
+1. Set `CLAWBACK_DOMAIN` in your `.env` to the public hostname:
 
 ```bash
+CLAWBACK_DOMAIN=clawback.example.com
 CONSOLE_ORIGIN=https://clawback.example.com
 ```
 
-## 8. Bootstrap and Verify
+2. Ensure DNS is pointing to the host:
+
+```bash
+dig +short clawback.example.com   # should return the VM's public IP
+```
+
+3. Ensure ports 80 and 443 are open in your firewall / security group.
+
+4. Start the stack:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+```
+
+Caddy will automatically obtain a TLS certificate on first request. You can
+watch the ACME handshake:
+
+```bash
+docker compose -f docker-compose.prod.yml logs -f caddy
+```
+
+### Verifying TLS
+
+```bash
+curl -I https://clawback.example.com
+```
+
+Expected: HTTP 200 with a valid TLS certificate.
+
+### Certificate Persistence
+
+Certificates are stored in the `caddy-data` Docker volume. As long as this
+volume is retained across restarts, Caddy will not re-request certificates.
+
+### Skipping Caddy
+
+If you are placing Clawback behind an existing load balancer or CDN that already
+terminates TLS, you can remove the `caddy` service from the compose file and
+change the console port binding back to `"${CONSOLE_PORT:-3000}:3000"` (removing
+the `127.0.0.1` prefix).
+
+### Custom Caddyfile
+
+The Caddyfile lives at `infra/caddy/Caddyfile` and is mounted read-only. To
+customize (e.g. add rate limiting, custom headers, or additional domains), edit
+that file and restart the caddy service:
+
+```bash
+docker compose -f docker-compose.prod.yml restart caddy
+```
+
+## 7. Bootstrap and Verify
 
 On a fresh database:
 
@@ -207,7 +297,7 @@ Current honest verifier behavior on a no-SMTP deployment:
 - denial still runs, so the review-resolution path is exercised even on the
   no-SMTP public-try story
 
-## 9. Provider-Specific Notes
+## 8. Provider-Specific Notes
 
 ### Gmail
 
@@ -233,7 +323,7 @@ Examples:
 - `/api/inbound/gmail-watch/...`
 - `/api/webhooks/n8n/...`
 
-## 10. Backups and Recovery
+## 9. Backups and Recovery
 
 Minimum operational stance:
 
@@ -243,7 +333,7 @@ Minimum operational stance:
 
 Clawback does not provide automatic backup orchestration yet.
 
-## 11. Known Limits of This Deployment Shape
+## 10. Known Limits of This Deployment Shape
 
 This deployment guide is honest to the current product:
 

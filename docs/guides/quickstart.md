@@ -22,7 +22,7 @@ This starts:
 
 - Postgres on `5433`
 - MinIO on `9000` / `9001`
-- OpenClaw on `18889` (`start-local.sh` remaps from the default `18789` to avoid port conflicts)
+- OpenClaw on `18889`
 - Console on `3000`
 - Control plane on `3011` (`start-local.sh` remaps from the default `3001` to avoid port conflicts; `pnpm dev` uses `3001`)
 
@@ -67,6 +67,11 @@ pnpm smoke:public-try
 ```
 
 This exercises the real ingress and reviewed-send paths. It is the fastest honest check that the local stack is healthy.
+
+Notes:
+
+- `./scripts/start-local.sh` automatically builds the shared packages before entering watch mode.
+- If a sibling `../openclaw` checkout is present, the script prefers host-run OpenClaw. Otherwise it uses the repo-contained Docker OpenClaw path automatically.
 
 ## Next steps
 

@@ -95,6 +95,8 @@ type ReviewResolutionServiceOptions = {
   reviewDecisionService?: ReviewDecisionService;
 };
 
+const STALE_EXECUTING_THRESHOLD_MS = 2 * 60 * 1000;
+
 export class ReviewExecutionStateError extends Error {
   readonly code = "review_execution_invalid_state";
   readonly statusCode = 409;
@@ -342,6 +344,58 @@ export class ReviewResolutionService {
       return;
     }
 
+    if (workItem.execution_status === "executing") {
+      const executingSince = this.getExecutingStartedAt(
+        priorExecutionOutcome?.last_attempted_at,
+        workItem.updated_at,
+      );
+      if (executingSince && !this.isStaleExecutingAttempt(executingSince)) {
+        return;
+      }
+
+      const failureMessage =
+        "Reviewed send was left executing after an interrupted attempt. Clawback did not auto-resend; use retry-send after checking delivery state.";
+      const failedState = executionState
+        ? runtimePack.runtime.hooks.markFailed(executionState)
+        : null;
+      const failedExecutionOutcome = markReviewedSendExecutionFailed(
+        priorExecutionOutcome
+          ?? markReviewedSendExecutionRunning(
+            queueReviewedSendExecution({
+              existing: null,
+              reviewId: review.id,
+              decision,
+              connectionId: prepared.connection.id,
+              connectionLabel: prepared.connection.label,
+              attemptedAt: executingSince ?? new Date(),
+            }),
+          ),
+        {
+          error: failureMessage,
+          failedAt: new Date(),
+          errorClassification: "transient",
+        },
+      );
+
+      await this.options.workItemService.update(workspaceId, workItem.id, {
+        status: "failed",
+        executionStatus: "failed",
+        executionError: failureMessage,
+        executionStateJson: failedState,
+        executionOutcomeJson: failedExecutionOutcome,
+      });
+      if (failedState) {
+        await this.syncFollowUpReviewInboxExecutionState(workspaceId, review, failedState);
+      }
+      await this.ensureWorkItemActivityEvent(workspaceId, workItem.id, {
+        review,
+        resultKind: activityResultKinds.sendFailed,
+        title: "Reviewed send marked failed after interrupted execution",
+        summary: failureMessage,
+      });
+      return;
+    }
+
     if (workItem.execution_status === "failed" && !allowRetry) {
       return;
     }
@@ -470,6 +524,50 @@ export class ReviewResolutionService {
         resultKind: activityResultKinds.externalWorkflowHandedOff,
         title: "External workflow handed off",
         summary: `Clawback handed ${request.workflow_identifier} to n8n.`,
+      });
+      return;
+    }
+
+    if (workItem.execution_status === "executing") {
+      const executingSince = this.getExecutingStartedAt(
+        priorExecutionOutcome?.last_attempted_at,
+        workItem.updated_at,
+      );
+      if (executingSince && !this.isStaleExecutingAttempt(executingSince)) {
+        return;
+      }
+
+      const failureMessage =
+        "Reviewed external workflow was left executing after an interrupted attempt. Clawback did not auto-retry; rerun only after checking backend state.";
+      const failedExecutionOutcome = markReviewedExternalWorkflowExecutionFailed(
+        priorExecutionOutcome
+          ?? markReviewedExternalWorkflowExecutionRunning(
+            queueReviewedExternalWorkflowExecution({
+              existing: null,
+              reviewId: review.id,
+              decision,
+              request,
+              connectionLabel: prepared.connection.label,
+              attemptedAt: executingSince ?? new Date(),
+            }),
+          ),
+        {
+          error: failureMessage,
+          failedAt: new Date(),
+        },
+      );
+
+      await this.options.workItemService.update(workspaceId, workItem.id, {
+        status: "failed",
+        executionStatus: "failed",
+        executionError: failureMessage,
+        executionOutcomeJson: failedExecutionOutcome,
+      });
+      await this.ensureWorkItemActivityEvent(workspaceId, workItem.id, {
+        review,
+        resultKind: activityResultKinds.externalWorkflowHandoffFailed,
+        title: "External workflow marked failed after interrupted execution",
+        summary: failureMessage,
       });
       return;
     }
@@ -925,6 +1023,23 @@ export class ReviewResolutionService {
       responseSummary: null,
       backendReference: null,
     };
+  }
+
+  private getExecutingStartedAt(
+    lastAttemptedAt: string | null | undefined,
+    updatedAt: string | null | undefined,
+  ): Date | null {
+    const candidate = lastAttemptedAt ?? updatedAt ?? null;
+    if (!candidate) {
+      return null;
+    }
+
+    const parsed = new Date(candidate);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private isStaleExecutingAttempt(executingSince: Date): boolean {
+    return Date.now() - executingSince.getTime() >= STALE_EXECUTING_THRESHOLD_MS;
   }
 
   private async syncFollowUpReviewExecutionState(

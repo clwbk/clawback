@@ -79,7 +79,21 @@ async function ensureOpenClawBootstrapConfig() {
 
   const existingPlugins = toObjectRecord(existingConfig.plugins);
   const existingEntries = toObjectRecord(existingPlugins.entries);
-  const existingPluginEntry = toObjectRecord(existingEntries["clawback-tools"]);
+  const configuredPluginIds = ["clawback-tools", "follow-up-tools"];
+  const nextEntries = { ...existingEntries };
+
+  for (const pluginId of configuredPluginIds) {
+    const existingPluginEntry = toObjectRecord(existingEntries[pluginId]);
+    nextEntries[pluginId] = {
+      ...existingPluginEntry,
+      enabled: true,
+      config: {
+        ...toObjectRecord(existingPluginEntry.config),
+        controlPlaneBaseUrl,
+        runtimeApiToken,
+      },
+    };
+  }
 
   const config = {
     ...existingConfig,
@@ -99,18 +113,7 @@ async function ensureOpenClawBootstrapConfig() {
     },
     plugins: {
       ...existingPlugins,
-      entries: {
-        ...existingEntries,
-        "clawback-tools": {
-          ...existingPluginEntry,
-          enabled: true,
-          config: {
-            ...toObjectRecord(existingPluginEntry.config),
-            controlPlaneBaseUrl,
-            runtimeApiToken,
-          },
-        },
-      },
+      entries: nextEntries,
     },
   };
 

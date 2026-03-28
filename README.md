@@ -70,6 +70,8 @@ This is runtime mediation — and no other tool in this space does it.
 > **Want the TL;DR?** See the [Quickstart Guide](docs/guides/quickstart.md) — zero to running in under 5 minutes.
 
 ```bash
+git clone https://github.com/clwbk/clawback.git clawback
+cd clawback
 pnpm install                # install dependencies
 ./scripts/start-local.sh    # start everything (infra + services)
 pnpm smoke:public-try       # run the main public verification flow
@@ -78,9 +80,8 @@ pnpm smoke:public-try       # run the main public verification flow
 Or step by step:
 
 ```bash
-pnpm compose:up:core        # Docker: Postgres, MinIO
+pnpm compose:up             # Docker: Postgres, MinIO, OpenClaw
 pnpm db:migrate             # run database migrations
-pnpm openclaw:dev           # host-run OpenClaw gateway
 pnpm dev                    # start console (3000) + control-plane (3001) + runtime worker
 ```
 
@@ -211,11 +212,13 @@ with `SEED_ADMIN_PASSWORD`.
 
 ### OpenClaw Runtime
 
-The recommended local dev path:
+The recommended public local dev path:
 
-- Docker for `postgres` and `minio`
-- Host-run OpenClaw via `pnpm openclaw:dev`
+- Docker for `postgres`, `minio`, and `openclaw`
 - Host-run control-plane/runtime-worker via `pnpm dev`
+
+If you also keep a sibling `../openclaw` checkout, `./scripts/start-local.sh`
+will automatically prefer the host-run OpenClaw gateway for faster iteration.
 
 Compose scripts auto-prepare `.runtime/openclaw/config` and
 `.runtime/openclaw/workspace` for bind mounting. They also seed a minimal

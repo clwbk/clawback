@@ -74,8 +74,12 @@ describe("migration journal integrity", () => {
   it("journal indices are sequential starting from 0", () => {
     const gaps: string[] = [];
     for (let i = 0; i < journal.entries.length; i++) {
-      if (journal.entries[i].idx !== i) {
-        gaps.push(`expected idx=${i}, got idx=${journal.entries[i].idx} (tag=${journal.entries[i].tag})`);
+      const entry = journal.entries[i];
+      if (!entry) {
+        continue;
+      }
+      if (entry.idx !== i) {
+        gaps.push(`expected idx=${i}, got idx=${entry.idx} (tag=${entry.tag})`);
       }
     }
     expect(gaps, `Non-sequential journal indices: ${gaps.join("; ")}`).toEqual([]);
@@ -98,6 +102,9 @@ describe("migration journal integrity", () => {
     for (let i = 1; i < journal.entries.length; i++) {
       const prev = journal.entries[i - 1];
       const curr = journal.entries[i];
+      if (!prev || !curr) {
+        continue;
+      }
       if (curr.when < prev.when) {
         violations.push(
           `idx ${curr.idx} (${curr.tag}, ts=${curr.when}) is earlier than idx ${prev.idx} (${prev.tag}, ts=${prev.when})`
@@ -165,8 +172,12 @@ describe("duplicate column detection", () => {
 
       let match: RegExpExecArray | null;
       while ((match = addColRegex.exec(content)) !== null) {
-        const table = match[1].toLowerCase();
-        const column = match[2].toLowerCase();
+        const [, tableRaw, columnRaw] = match;
+        if (!tableRaw || !columnRaw) {
+          continue;
+        }
+        const table = tableRaw.toLowerCase();
+        const column = columnRaw.toLowerCase();
         const key = `${table}.${column}`;
 
         if (!addColumnMap.has(key)) {
@@ -186,8 +197,14 @@ describe("duplicate column detection", () => {
         const tags = [...migrations.keys()];
         // Check if the LATER migration uses IF NOT EXISTS
         const lastTag = tags[tags.length - 1];
+        if (!lastTag) {
+          continue;
+        }
         const lastFile = fs.readFileSync(path.join(DRIZZLE_DIR, `${lastTag}.sql`), "utf-8");
         const col = colKey.split(".")[1];
+        if (!col) {
+          continue;
+        }
         const hasGuard = new RegExp(
           `ADD\\s+COLUMN\\s+IF\\s+NOT\\s+EXISTS\\s+"?${col}"?`,
           "i"
@@ -223,7 +240,11 @@ describe("CREATE TABLE duplication detection", () => {
 
       let match: RegExpExecArray | null;
       while ((match = createTableRegex.exec(content)) !== null) {
-        const table = match[1].toLowerCase();
+        const [, tableRaw] = match;
+        if (!tableRaw) {
+          continue;
+        }
+        const table = tableRaw.toLowerCase();
         if (!createTableMap.has(table)) {
           createTableMap.set(table, []);
         }
@@ -260,7 +281,11 @@ describe("CREATE TYPE duplication detection", () => {
 
       let match: RegExpExecArray | null;
       while ((match = createTypeRegex.exec(content)) !== null) {
-        const enumName = match[1].toLowerCase();
+        const [, enumNameRaw] = match;
+        if (!enumNameRaw) {
+          continue;
+        }
+        const enumName = enumNameRaw.toLowerCase();
         // Check if this CREATE TYPE is inside a DO $$ exception block
         const lineIdx = content.lastIndexOf("\n", match.index);
         const contextBefore = content.slice(Math.max(0, lineIdx - 200), match.index);
@@ -300,10 +325,20 @@ describe("migration file naming", () => {
   });
 
   it("file prefixes are sequential with no gaps", () => {
-    const prefixes = sqlFiles.map((f) => parseInt(f.split("_")[0], 10)).sort((a, b) => a - b);
+    const prefixes = sqlFiles
+      .map((f) => {
+        const [prefix] = f.split("_");
+        return prefix ? parseInt(prefix, 10) : Number.NaN;
+      })
+      .filter((prefix) => !Number.isNaN(prefix))
+      .sort((a, b) => a - b);
     const gaps: number[] = [];
     for (let i = 0; i < prefixes.length; i++) {
-      if (prefixes[i] !== i) {
+      const prefix = prefixes[i];
+      if (prefix === undefined) {
+        continue;
+      }
+      if (prefix !== i) {
         gaps.push(i);
         break; // report first gap only
       }

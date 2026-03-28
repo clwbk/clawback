@@ -1,0 +1,18 @@
+{
+  "id": "follow-up-tools",
+  "name": "Follow-Up Tools",
+  "description": "Clawback Client Follow-Up worker tools",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "controlPlaneBaseUrl": {
+        "type": "string"
+      },
+      "runtimeApiToken": {
+        "type": "string"
+      }
+    },
+    "required": ["controlPlaneBaseUrl", "runtimeApiToken"]
+  }
+}
