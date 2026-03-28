@@ -43,7 +43,7 @@ Suggested local values:
 If you want realistic sample data right away:
 
 ```bash
-pnpm --filter @clawback/db seed
+pnpm db:seed
 ```
 
 Then sign in as:

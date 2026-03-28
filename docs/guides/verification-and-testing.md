@@ -38,7 +38,7 @@ Expected:
 ### 2. Seed demo data if you want a realistic workspace
 
 ```bash
-pnpm --filter @clawback/db seed
+pnpm db:seed
 ```
 
 ### 3. Log in as the demo admin

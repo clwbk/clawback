@@ -108,7 +108,7 @@ No hardcoded defaults. Visit `/setup` on first launch to bootstrap.
 | Display name   | `Admin`             |
 | Password       | `password1`         |
 
-> **Note:** The email field uses standard email validation (`z.email()`), so bare hostnames like `admin@localhost` will be rejected. Use a full domain. The password must be at least 8 characters. Alternatively, load the demo seed (`pnpm --filter @clawback/db seed`) and log in as `dave@hartwell.com` / `demo1234`.
+> **Note:** The email field uses standard email validation (`z.email()`), so bare hostnames like `admin@localhost` will be rejected. Use a full domain. The password must be at least 8 characters. Alternatively, load the demo seed (`pnpm db:seed`) and log in as `dave@hartwell.com` / `demo1234`.
 
 ### Commands
 

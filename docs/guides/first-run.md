@@ -7,7 +7,7 @@ What to do immediately after the stack is up.
 ## 1. Load the Demo Workspace
 
 ```bash
-pnpm --filter @clawback/db seed
+pnpm db:seed
 ```
 
 The seed creates a realistic small-team workspace with:

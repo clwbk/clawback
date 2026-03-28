@@ -82,7 +82,7 @@ Suggested local values:
 If you want realistic sample data immediately:
 
 ```bash
-pnpm --filter @clawback/db seed
+pnpm db:seed
 ```
 
 Demo login:
@@ -182,7 +182,7 @@ Use:
 This is the simplest no-trust context path:
 
 1. Open `/workspace/connectors` and inspect the seeded `Company Docs` connector
-2. Confirm it already has a completed sync job after `pnpm --filter @clawback/db seed`
+2. Confirm it already has a completed sync job after `pnpm db:seed`
 3. Run the retrieval smokes against that seeded corpus
 4. Add another local-directory connector only if you want to try a different document set
 
@@ -227,7 +227,7 @@ Important current behavior:
 Use this sequence:
 
 1. Start the stack with `./scripts/start-local.sh`
-2. Seed demo data with `pnpm --filter @clawback/db seed`
+2. Seed demo data with `pnpm db:seed`
 3. Log in as `dave@hartwell.com`
 4. Open `Workers`, `Inbox`, `Work`, and `Activity`
 5. Run `pnpm smoke:public-try`

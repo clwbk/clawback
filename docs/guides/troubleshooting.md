@@ -28,7 +28,7 @@ If `/healthz` fails, the service is down. If `/readyz` fails, a dependency like 
 Make sure demo data exists:
 
 ```bash
-pnpm --filter @clawback/db seed
+pnpm db:seed
 ```
 
 Demo users:
