@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { AuthServiceError, type AuthServiceContract, type SessionContext } from "@clawback/auth";
 
@@ -498,6 +498,38 @@ class FakeOperatorActionsService implements OperatorActionsServiceContract {
     };
   }
 
+  async getRuntimeReadinessStatus() {
+    return {
+      ok: true,
+      status: "ready" as const,
+      configured_provider: "openai",
+      configured_provider_env_var: "OPENAI_API_KEY",
+      configured_provider_key_present: true,
+      gateway_main_model: "openai/gpt-4.1-mini",
+      gateway_main_provider: "openai",
+      gateway_main_provider_env_var: "OPENAI_API_KEY",
+      gateway_main_provider_key_present: true,
+      published_agent_count: 1,
+      checks: {
+        gateway: {
+          ok: true,
+          summary: "OpenClaw gateway responded to config.get.",
+          detail: "Gateway primary model appears to be openai/gpt-4.1-mini.",
+        },
+        configured_provider_key: {
+          ok: true,
+          summary: "OPENAI_API_KEY is present for the configured openai provider.",
+          detail: null,
+        },
+        gateway_main_provider_key: {
+          ok: true,
+          summary: "OPENAI_API_KEY is present for the gateway primary provider openai.",
+          detail: null,
+        },
+      },
+    };
+  }
+
   async restartOpenClaw() {
     return {
       target: "openclaw" as const,
@@ -843,6 +875,9 @@ class FakeRuntimeToolService implements RuntimeToolServiceContract {
 }
 
 describe("control-plane auth routes", () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalGmailPollingEnabled =
+    process.env.CLAWBACK_GMAIL_POLLING_ENABLED;
   let fakeAuthService: FakeAuthService;
   let fakeAgentService: FakeAgentService;
   let fakeConversationRunService: FakeConversationRunService;
@@ -861,8 +896,23 @@ describe("control-plane auth routes", () => {
     fakeRuntimeToolService = new FakeRuntimeToolService();
   });
 
-  it("bootstraps, reads session, creates an invite, and logs out", async () => {
-    const app = await createControlPlaneApp({
+  afterEach(() => {
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+
+    if (originalGmailPollingEnabled === undefined) {
+      delete process.env.CLAWBACK_GMAIL_POLLING_ENABLED;
+    } else {
+      process.env.CLAWBACK_GMAIL_POLLING_ENABLED =
+        originalGmailPollingEnabled;
+    }
+  });
+
+  async function createTestApp() {
+    return createControlPlaneApp({
       authService: fakeAuthService,
       agentService: fakeAgentService,
       approvalService: fakeApprovalService,
@@ -873,6 +923,87 @@ describe("control-plane auth routes", () => {
       cookieSecret: "test-cookie-secret-that-is-long-enough",
       consoleOrigin: "http://localhost:3000",
     });
+  }
+
+  it("bypasses the global rate limiter for loopback reads in local dev", async () => {
+    delete process.env.NODE_ENV;
+    process.env.CLAWBACK_GMAIL_POLLING_ENABLED = "false";
+
+    const app = await createTestApp();
+
+    for (let attempt = 0; attempt < 101; attempt += 1) {
+      const response = await app.inject({
+        method: "GET",
+        url: "/api/setup/status",
+        remoteAddress: "127.0.0.1",
+      });
+
+      expect(response.statusCode).toBe(200);
+    }
+
+    await app.close();
+  });
+
+  it("keeps route-specific write limits active in development", async () => {
+    process.env.NODE_ENV = "development";
+    process.env.CLAWBACK_GMAIL_POLLING_ENABLED = "false";
+
+    const app = await createTestApp();
+    const payload = {
+      email: "admin@example.com",
+      password: "password123",
+    };
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/auth/login",
+        remoteAddress: "127.0.0.1",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(200);
+    }
+
+    const limitedResponse = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      remoteAddress: "127.0.0.1",
+      payload,
+    });
+
+    expect(limitedResponse.statusCode).toBe(429);
+    await app.close();
+  });
+
+  it("still rate limits non-loopback reads in development", async () => {
+    process.env.NODE_ENV = "development";
+    process.env.CLAWBACK_GMAIL_POLLING_ENABLED = "false";
+
+    const app = await createTestApp();
+
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+      const response = await app.inject({
+        method: "GET",
+        url: "/api/setup/status",
+        remoteAddress: "203.0.113.10",
+      });
+
+      expect(response.statusCode).toBe(200);
+    }
+
+    const limitedResponse = await app.inject({
+      method: "GET",
+      url: "/api/setup/status",
+      remoteAddress: "203.0.113.10",
+    });
+
+    expect(limitedResponse.statusCode).toBe(429);
+    await app.close();
+  });
+
+  it("bootstraps, reads session, creates an invite, and logs out", async () => {
+    const app = await createTestApp();
 
     const bootstrapResponse = await app.inject({
       method: "POST",
@@ -931,17 +1062,7 @@ describe("control-plane auth routes", () => {
   });
 
   it("creates, edits, publishes, and lists agents through the control-plane routes", async () => {
-    const app = await createControlPlaneApp({
-      authService: fakeAuthService,
-      agentService: fakeAgentService,
-      approvalService: fakeApprovalService,
-      conversationRunService: fakeConversationRunService,
-      operatorActionsService: fakeOperatorActionsService,
-      runtimeToolService: fakeRuntimeToolService,
-      ticketService: fakeTicketService,
-      cookieSecret: "test-cookie-secret-that-is-long-enough",
-      consoleOrigin: "http://localhost:3000",
-    });
+    const app = await createTestApp();
 
     const bootstrapResponse = await app.inject({
       method: "POST",
@@ -1177,6 +1298,23 @@ describe("control-plane auth routes", () => {
       reason: null,
     });
 
+    const readinessResponse = await app.inject({
+      method: "GET",
+      url: "/api/admin/runtime-readiness",
+      headers: {
+        cookie: adminCookie,
+      },
+    });
+
+    expect(readinessResponse.statusCode).toBe(200);
+    expect(readinessResponse.json()).toMatchObject({
+      ok: true,
+      status: "ready",
+      configured_provider: "openai",
+      gateway_main_model: "openai/gpt-4.1-mini",
+      published_agent_count: 1,
+    });
+
     const restartResponse = await app.inject({
       method: "POST",
       url: "/api/admin/runtime-control/restart",
@@ -1238,6 +1376,16 @@ describe("control-plane auth routes", () => {
     });
 
     expect(forbiddenResponse.statusCode).toBe(403);
+
+    const forbiddenReadinessResponse = await app.inject({
+      method: "GET",
+      url: "/api/admin/runtime-readiness",
+      headers: {
+        cookie: userCookie,
+      },
+    });
+
+    expect(forbiddenReadinessResponse.statusCode).toBe(403);
     await app.close();
   });
 

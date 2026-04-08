@@ -70,6 +70,15 @@ HCLOUD_TOKEN=... ./scripts/provision-hetzner-rehearsal.sh
 Or create a fresh VM and run acceptance without TLS first to confirm the
 baseline, then layer TLS on top.
 
+If you want a local readiness check before you start provisioning, run:
+
+```bash
+pnpm check:hetzner-deploy
+```
+
+That reports the minimum missing tools, secrets, and domain settings for a real
+Hetzner + TLS rollout.
+
 ---
 
 ## Environment Variables
@@ -219,6 +228,13 @@ ssh root@<VM_IP>
 cd /root/clawback
 cp .env.prod.example .env
 # Edit .env: set all required secrets and the TLS variables
+```
+
+If you prefer to generate the file locally first:
+
+```bash
+pnpm generate:prod-env -- --domain demo.clawback.team --output /tmp/clawback-demo.env
+scp /tmp/clawback-demo.env root@<VM_IP>:/root/clawback/.env
 ```
 
 Key values to set:

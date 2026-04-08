@@ -39,7 +39,7 @@ function statePresentation(state: GovernedActionSummary["approvalState"]) {
       };
     default:
       return {
-        label: "Pending review",
+        label: "Approval pending",
         className: "border-amber-200 bg-amber-50 text-amber-800",
         icon: ShieldCheck,
       };
@@ -109,7 +109,7 @@ export function GovernedActionCard({ runId, summary, isAdmin = false }: Governed
         {summary.approvalId ? (
           <Button asChild size="sm" variant="outline">
             <Link href={`/workspace/inbox?review=${summary.approvalId}`}>
-              Open review
+              Review approval
               <ExternalLink className="h-3.5 w-3.5" />
             </Link>
           </Button>

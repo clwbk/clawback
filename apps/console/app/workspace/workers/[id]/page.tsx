@@ -11,7 +11,6 @@ import {
   listWorkspaceInputRoutes,
   listWorkspacePeople,
   listWorkspaceWork,
-  listWorkspaceWorkers,
 } from "@/lib/control-plane";
 import {
   followUpActions,
@@ -34,6 +33,8 @@ import {
   workerStatusVariant,
   workKindVariant,
 } from "../../_lib/presentation";
+import { WorkerActivationRail } from "./worker-activation-rail";
+import { buildWorkerActivationSteps } from "./worker-activation";
 import { WorkerConfigPanel } from "./worker-config-panel";
 import { WorkerFocusSection } from "./worker-focus-section";
 
@@ -42,9 +43,18 @@ type WorkerDetailPageProps = {
   searchParams: Promise<{ focus?: string; from?: string }>;
 };
 
-export default async function WorkerDetailPage({ params, searchParams }: WorkerDetailPageProps) {
+export default async function WorkerDetailPage({
+  params,
+  searchParams,
+}: WorkerDetailPageProps) {
   const { id } = await params;
   const { focus, from } = await searchParams;
+  const returnLink =
+    from === "setup"
+      ? { href: "/workspace/setup", label: "Back to setup" }
+      : from === "workers"
+        ? { href: "/workspace/workers", label: "Back to workers" }
+        : null;
   let worker = fixtureWorkers.find((entry) => entry.id === id) ?? null;
   const initialWorkerId = worker?.id ?? null;
   let inputRoutes = initialWorkerId
@@ -66,39 +76,72 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
     ["usr_emma_01", "Emma Chen"],
   ]);
   let usingFixtureFallback = false;
+  let disableLiveActions = false;
 
-  try {
-    const [
-      workerResult,
-      routeResult,
-      connectionResult,
-      actionResult,
-      inboxResult,
-      workResult,
-      workerListResult,
-      peopleResult,
-    ] = await Promise.all([
-      getWorkspaceWorker(id),
-      listWorkspaceInputRoutes({ workerId: id }),
-      listWorkspaceConnections(),
-      listWorkspaceActionCapabilities({ workerId: id }),
-      listWorkspaceInbox(),
-      listWorkspaceWork({ workerId: id }),
-      listWorkspaceWorkers(),
-      listWorkspacePeople(),
-    ]);
+  const [
+    workerResult,
+    routeResult,
+    connectionResult,
+    actionResult,
+    inboxResult,
+    workResult,
+    peopleResult,
+  ] = await Promise.all([
+    getWorkspaceWorker(id).catch(() => null),
+    listWorkspaceInputRoutes({ workerId: id }).catch(() => null),
+    listWorkspaceConnections().catch(() => null),
+    listWorkspaceActionCapabilities({ workerId: id }).catch(() => null),
+    listWorkspaceInbox().catch(() => null),
+    listWorkspaceWork({ workerId: id }).catch(() => null),
+    listWorkspacePeople().catch(() => null),
+  ]);
 
+  if (workerResult) {
     worker = workerResult;
+  } else {
+    usingFixtureFallback = true;
+    disableLiveActions = true;
+  }
+
+  if (routeResult) {
     inputRoutes = routeResult.input_routes;
+  } else {
+    usingFixtureFallback = true;
+    disableLiveActions = true;
+  }
+
+  if (connectionResult) {
     allConnections = connectionResult.connections;
     connections = connectionResult.connections.filter((connection) =>
       connection.attached_worker_ids.includes(id),
     );
+  } else {
+    usingFixtureFallback = true;
+  }
+
+  if (actionResult) {
     actionCapabilities = actionResult.action_capabilities;
+  } else {
+    usingFixtureFallback = true;
+  }
+
+  if (inboxResult) {
     inboxItems = inboxResult.items.filter((entry) => entry.worker_id === id);
+  } else {
+    usingFixtureFallback = true;
+  }
+
+  if (workResult) {
     workItems = workResult.work_items;
-    people = new Map(peopleResult.people.map((person) => [person.id, person.display_name]));
-  } catch {
+  } else {
+    usingFixtureFallback = true;
+  }
+
+  if (peopleResult) {
+    people = new Map(
+      peopleResult.people.map((person) => [person.id, person.display_name]),
+    );
+  } else {
     usingFixtureFallback = true;
   }
 
@@ -106,7 +149,9 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
     return (
       <div className="flex h-full items-center justify-center bg-background">
         <div className="text-center">
-          <h1 className="text-xl font-semibold text-foreground">Worker not found</h1>
+          <h1 className="text-xl font-semibold text-foreground">
+            Worker not found
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             No worker with id &ldquo;{id}&rdquo;
           </p>
@@ -126,18 +171,29 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
   );
   const watchedInboxRoute = inputRoutes.find((r) => r.kind === "watched_inbox");
   const gmailMonitoringActive =
-    gmailConnection?.status === "connected" && watchedInboxRoute?.status === "active";
+    gmailConnection?.status === "connected" &&
+    watchedInboxRoute?.status === "active";
+  const activationSteps = buildWorkerActivationSteps({
+    worker,
+    inputRoutes,
+    availableConnections: allConnections,
+    attachedConnections: connections,
+    actionCapabilities,
+    inboxItems,
+    workItems,
+    from: from ?? null,
+  });
 
   return (
     <div className="h-full overflow-y-auto bg-background">
       <WorkerFocusSection focus={focus ?? null} />
       <div className="mx-auto max-w-5xl space-y-8 px-6 py-10">
-        {from === "setup" ? (
+        {returnLink ? (
           <Link
-            href="/workspace/setup"
+            href={returnLink.href}
             className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
           >
-            &larr; Back to setup
+            &larr; {returnLink.label}
           </Link>
         ) : null}
         {/* Breadcrumb + Identity header */}
@@ -153,9 +209,13 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
             <p className="text-sm font-medium uppercase tracking-widest text-muted-foreground">
               {worker.slug}
             </p>
-            {usingFixtureFallback ? <Badge variant="outline">fixture fallback</Badge> : null}
+            {usingFixtureFallback ? (
+              <Badge variant="outline">fixture fallback</Badge>
+            ) : null}
           </div>
-          <h1 className="mt-1 text-2xl font-semibold text-foreground">{worker.name}</h1>
+          <h1 className="mt-1 text-2xl font-semibold text-foreground">
+            {worker.name}
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">{worker.summary}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Badge variant={workerStatusVariant(worker.status)}>
@@ -164,6 +224,15 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
             <Badge variant="outline">{worker.scope}</Badge>
             <Badge variant="secondary">{humanizeLabel(worker.kind)}</Badge>
           </div>
+        </div>
+
+        <div className="lg:hidden" data-worker-focus="proof">
+          <WorkerActivationRail
+            workerId={worker.id}
+            steps={activationSteps}
+            usingFixtureFallback={usingFixtureFallback}
+            disableLiveActions={disableLiveActions}
+          />
         </div>
 
         {/* Configuration panel */}
@@ -194,15 +263,27 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-3 gap-4">
-                  <RoleList title="Members" ids={worker.member_ids} people={people} />
-                  <RoleList title="Assignees" ids={worker.assignee_ids} people={people} />
-                  <RoleList title="Reviewers" ids={worker.reviewer_ids} people={people} />
+                  <RoleList
+                    title="Members"
+                    ids={worker.member_ids}
+                    people={people}
+                  />
+                  <RoleList
+                    title="Assignees"
+                    ids={worker.assignee_ids}
+                    people={people}
+                  />
+                  <RoleList
+                    title="Reviewers"
+                    ids={worker.reviewer_ids}
+                    people={people}
+                  />
                 </div>
               </CardContent>
             </Card>
 
             {/* ── Inputs ── */}
-            <Card id="routes-section">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-base">Inputs</CardTitle>
               </CardHeader>
@@ -217,12 +298,16 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium text-foreground">{route.label}</p>
+                              <p className="text-sm font-medium text-foreground">
+                                {route.label}
+                              </p>
                               <Badge variant="outline" className="text-xs">
                                 {humanizeLabel(route.kind)}
                               </Badge>
                             </div>
-                            <p className="mt-0.5 text-xs text-muted-foreground">{route.description}</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {route.description}
+                            </p>
                           </div>
                           <Badge
                             variant={routeStatusVariant(route.status)}
@@ -235,22 +320,31 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
                         {/* Forwarding address for forward_email routes */}
                         {route.kind === "forward_email" && route.address ? (
                           <div className="mt-2 rounded-md bg-muted/50 px-3 py-2">
-                            <p className="text-xs text-muted-foreground">Forwarding address</p>
-                            <p className="mt-0.5 font-mono text-xs text-foreground">{route.address}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Forwarding address
+                            </p>
+                            <p className="mt-0.5 font-mono text-xs text-foreground">
+                              {route.address}
+                            </p>
                           </div>
                         ) : null}
 
                         {/* Watched inbox address */}
                         {route.kind === "watched_inbox" && route.address ? (
                           <div className="mt-2 rounded-md bg-sky-50/50 px-3 py-2 dark:bg-sky-950/20">
-                            <p className="text-xs text-sky-700 dark:text-sky-300">Monitoring</p>
-                            <p className="mt-0.5 font-mono text-xs text-foreground">{route.address}</p>
+                            <p className="text-xs text-sky-700 dark:text-sky-300">
+                              Monitoring
+                            </p>
+                            <p className="mt-0.5 font-mono text-xs text-foreground">
+                              {route.address}
+                            </p>
                           </div>
                         ) : null}
 
                         {route.kind === "watched_inbox" ? (
                           <p className="mt-2 text-xs text-sky-700 dark:text-sky-300">
-                            Proactive route. Notices inbox activity from Gmail read-only and creates shadow suggestions only.
+                            Proactive route. Notices inbox activity from Gmail
+                            read-only and creates shadow suggestions only.
                           </p>
                         ) : null}
 
@@ -271,7 +365,7 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
             </Card>
 
             {/* ── Connections ── */}
-            <Card id="connections-section">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-base">Connections</CardTitle>
               </CardHeader>
@@ -286,7 +380,9 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium text-foreground">{connection.label}</p>
+                              <p className="text-sm font-medium text-foreground">
+                                {connection.label}
+                              </p>
                               <Badge variant="outline" className="text-xs">
                                 {humanizeLabel(connection.access_mode)}
                               </Badge>
@@ -308,7 +404,8 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
                         </div>
 
                         {/* Gmail-specific monitoring status */}
-                        {connection.provider === "gmail" && connection.access_mode === "read_only" ? (
+                        {connection.provider === "gmail" &&
+                        connection.access_mode === "read_only" ? (
                           <div className="mt-2 rounded-md bg-sky-50/50 px-3 py-2 dark:bg-sky-950/20">
                             <div className="flex items-center gap-2">
                               <span
@@ -325,7 +422,8 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
                               </p>
                             </div>
                             <p className="mt-1 text-xs text-muted-foreground">
-                              Read-only connection. Enables watched inbox without enabling send.
+                              Read-only connection. Enables watched inbox
+                              without enabling send.
                             </p>
                           </div>
                         ) : null}
@@ -333,13 +431,15 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No connections attached.</p>
+                  <p className="text-sm text-muted-foreground">
+                    No connections attached.
+                  </p>
                 )}
               </CardContent>
             </Card>
 
             {/* ── Actions ── */}
-            <Card id="actions-section">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-base">Actions</CardTitle>
               </CardHeader>
@@ -361,9 +461,15 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
                             </p>
                             {action.reviewer_ids.length > 0 ? (
                               <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                                <span className="text-xs text-muted-foreground">Reviewers:</span>
+                                <span className="text-xs text-muted-foreground">
+                                  Reviewers:
+                                </span>
                                 {action.reviewer_ids.map((rid) => (
-                                  <Badge key={rid} variant="outline" className="text-xs">
+                                  <Badge
+                                    key={rid}
+                                    variant="outline"
+                                    className="text-xs"
+                                  >
                                     {personName(people, rid)}
                                   </Badge>
                                 ))}
@@ -381,7 +487,9 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No actions configured.</p>
+                  <p className="text-sm text-muted-foreground">
+                    No actions configured.
+                  </p>
                 )}
               </CardContent>
             </Card>
@@ -389,6 +497,18 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
 
           {/* Sidebar: recent inbox + work */}
           <div className="space-y-6 lg:col-span-2">
+            <div
+              className="hidden lg:block lg:sticky lg:top-6"
+              data-worker-focus="proof"
+            >
+              <WorkerActivationRail
+                workerId={worker.id}
+                steps={activationSteps}
+                usingFixtureFallback={usingFixtureFallback}
+                disableLiveActions={disableLiveActions}
+              />
+            </div>
+
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -415,13 +535,17 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
                           variant={inboxKindVariant(entry.kind)}
                           className={`shrink-0 text-xs ${shadowBadgeClassName(entry.kind)}`}
                         >
-                          {entry.kind === "shadow" ? "shadow suggestion" : humanizeLabel(entry.kind)}
+                          {entry.kind === "shadow"
+                            ? "shadow suggestion"
+                            : humanizeLabel(entry.kind)}
                         </Badge>
                       </div>
                     </Link>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">No inbox items for this worker.</p>
+                  <p className="text-sm text-muted-foreground">
+                    No inbox items for this worker.
+                  </p>
                 )}
               </CardContent>
             </Card>
@@ -448,14 +572,19 @@ export default async function WorkerDetailPage({ params, searchParams }: WorkerD
                     >
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-sm text-foreground">{item.title}</p>
-                        <Badge variant={workKindVariant(item.kind)} className="shrink-0 text-xs">
+                        <Badge
+                          variant={workKindVariant(item.kind)}
+                          className="shrink-0 text-xs"
+                        >
                           {humanizeLabel(item.kind)}
                         </Badge>
                       </div>
                     </Link>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">No work items for this worker.</p>
+                  <p className="text-sm text-muted-foreground">
+                    No work items for this worker.
+                  </p>
                 )}
               </CardContent>
             </Card>

@@ -46,6 +46,12 @@ Copy the production example file:
 cp .env.prod.example .env
 ```
 
+Or generate a ready-to-edit production env file with strong random secrets:
+
+```bash
+pnpm generate:prod-env -- --domain demo.clawback.team --output .env
+```
+
 At minimum, set strong values for:
 
 - `POSTGRES_PASSWORD`
@@ -120,6 +126,9 @@ Check logs if anything looks wrong:
 docker compose -f docker-compose.prod.yml logs -f control-plane console runtime-worker
 ```
 
+If you are still deciding between the shared demo, local quickstart, and this
+deployment path, read [Start Here](./start-here.md) first.
+
 ## Fresh VM Rehearsal
 
 If you want to prove the current single-node deployment path on a fresh
@@ -137,6 +146,13 @@ rehearsal VM from your local machine first:
 HCLOUD_TOKEN=... ./scripts/provision-hetzner-rehearsal.sh
 ```
 
+Before a real Hetzner + TLS rollout, you can also run a local preflight to see
+exactly what is still missing:
+
+```bash
+pnpm check:hetzner-deploy
+```
+
 This bootstraps Docker on the remote host, syncs the current repo snapshot, and
 runs the existing deployed-stack acceptance flow there.
 
@@ -152,6 +168,35 @@ What it does not prove:
 - SMTP-backed reviewed-send delivery
 - Gmail-connected acceptance
 - persistent deployment with a retained `.env`
+
+## Updating An Existing Remote Host
+
+If you already have a VM running the supported production Compose stack and
+just want to push the current checkout onto it, use:
+
+```bash
+./scripts/deploy-remote-stack.sh --host user@host
+```
+
+Common options:
+
+```bash
+./scripts/deploy-remote-stack.sh \
+  --host user@host \
+  --identity ~/.ssh/id_ed25519 \
+  --workspace ~/clawback-deploy \
+  --env-file .env
+```
+
+This syncs the current repo snapshot, preserves the remote `.env`, and runs:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+```
+
+Use `--skip-rsync` if the remote workspace is already current and you only want
+to restart, or `--no-build` if you explicitly want to reuse the images already
+present on the host.
 
 ## 5. Verify the Control Plane
 

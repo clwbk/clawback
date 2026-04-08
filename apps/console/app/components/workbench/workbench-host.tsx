@@ -17,6 +17,7 @@ import type {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { buildRunFailurePresentation } from "@/lib/run-failure";
 
 interface WorkbenchHostProps {
   assistant: AgentRecord | null;
@@ -37,6 +38,21 @@ function statusTone(status: "pending" | "approved" | "denied" | "expired" | "can
   }
 }
 
+function statusLabel(status: "pending" | "approved" | "denied" | "expired" | "canceled") {
+  switch (status) {
+    case "pending":
+      return "Approval pending";
+    case "approved":
+      return "Approved";
+    case "denied":
+      return "Denied";
+    case "expired":
+      return "Expired";
+    case "canceled":
+      return "Canceled";
+  }
+}
+
 export function WorkbenchHost({
   assistant,
   conversationDetail,
@@ -54,6 +70,16 @@ export function WorkbenchHost({
   });
   const quickPrompts =
     suggestedTemplate?.starterPrompts ?? assistantTemplateCatalog[0]!.starterPrompts;
+  const latestRun = summary.latestRunId ? runsById[summary.latestRunId] ?? null : null;
+  const latestRunEvents = latestRun ? (runEventsById[latestRun.id] ?? []) : [];
+  const latestRunFailure =
+    latestRun && latestRun.status === "failed"
+      ? buildRunFailurePresentation({
+          run: latestRun,
+          events: latestRunEvents,
+          isAdmin: false,
+        })
+      : null;
 
   return (
     <aside className="hidden h-full min-h-0 flex-col border-l border-border/80 bg-muted/10 xl:flex">
@@ -123,7 +149,7 @@ export function WorkbenchHost({
                     variant="outline"
                     className={statusTone(summary.governedAction.approvalState)}
                   >
-                    {summary.governedAction.approvalState.replaceAll("_", " ")}
+                    {statusLabel(summary.governedAction.approvalState)}
                   </Badge>
                 </div>
                 <div className="space-y-1 text-sm text-muted-foreground">
@@ -152,7 +178,7 @@ export function WorkbenchHost({
                   {summary.governedAction.approvalId ? (
                     <Button asChild size="sm" variant="outline">
                       <Link href={`/workspace/inbox?review=${summary.governedAction.approvalId}`}>
-                        Open review
+                        Review approval
                         <ExternalLink className="h-3.5 w-3.5" />
                       </Link>
                     </Button>
@@ -175,6 +201,24 @@ export function WorkbenchHost({
                   ) : null}
                 </div>
               </>
+            ) : latestRunFailure && latestRun ? (
+              <div
+                data-testid="workbench-run-failure"
+                className="rounded-lg border border-destructive/20 bg-destructive/5 p-4"
+              >
+                <p className="text-xs font-medium uppercase tracking-widest text-destructive">
+                  {latestRunFailure.title}
+                </p>
+                <p className="mt-1 text-sm text-foreground">{latestRunFailure.message}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/workspace/runs/${latestRun.id}`}>
+                      View trace
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
             ) : (
               <div className="rounded-lg border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
                 No structured artifact or governed action yet. Ask the assistant to draft something

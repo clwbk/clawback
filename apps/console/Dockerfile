@@ -1,3 +1,5 @@
+ARG NEXT_PUBLIC_PUBLIC_DEMO_MODE=false
+
 # ---- Stage 1: Dependencies ----
 FROM node:22-alpine AS deps
 RUN corepack enable && corepack prepare pnpm@10.29.3 --activate
@@ -16,12 +18,16 @@ FROM node:22-alpine AS builder
 RUN corepack enable && corepack prepare pnpm@10.29.3 --activate
 WORKDIR /app
 
+ARG NEXT_PUBLIC_PUBLIC_DEMO_MODE
+ENV NEXT_PUBLIC_PUBLIC_DEMO_MODE=$NEXT_PUBLIC_PUBLIC_DEMO_MODE
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/console/node_modules ./apps/console/node_modules
 COPY --from=deps /app/packages/contracts/node_modules ./packages/contracts/node_modules
 
 # Copy source
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
+COPY docs/guides docs/guides
 COPY packages/contracts packages/contracts
 COPY apps/console apps/console
 
@@ -33,8 +39,10 @@ RUN pnpm --filter @clawback/console build
 FROM node:22-alpine AS runner
 WORKDIR /app
 
+ARG NEXT_PUBLIC_PUBLIC_DEMO_MODE
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_PUBLIC_PUBLIC_DEMO_MODE=$NEXT_PUBLIC_PUBLIC_DEMO_MODE
 
 RUN addgroup --system --gid 1001 clawback && \
     adduser --system --uid 1001 clawback
@@ -43,6 +51,7 @@ RUN addgroup --system --gid 1001 clawback && \
 COPY --from=builder /app/apps/console/.next/standalone ./
 COPY --from=builder /app/apps/console/.next/static ./apps/console/.next/static
 COPY --from=builder /app/apps/console/public ./apps/console/public
+COPY --from=builder /app/docs/guides ./docs/guides
 
 USER clawback
 

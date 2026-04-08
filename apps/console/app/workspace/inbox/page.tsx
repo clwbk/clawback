@@ -351,6 +351,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                         <RouteActions
                           inboxItemId={selectedItem.id}
                           state={selectedItem.state}
+                          assigneeIds={selectedItem.assignee_ids}
                         />
                       </div>
                     </div>
@@ -409,6 +410,8 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                         <ReviewActions
                           reviewId={review.id}
                           reviewStatus={review.status}
+                          reviewerIds={review.reviewer_ids}
+                          assigneeIds={review.assignee_ids}
                           workItemId={selectedWorkItem?.id ?? null}
                           executionStatus={selectedWorkItem?.execution_status ?? null}
                           executionOutcome={

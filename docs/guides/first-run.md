@@ -15,7 +15,7 @@ The seed creates a realistic small-team workspace with:
 - shared workers
 - input routes
 - connections
-- a `Company Docs` local-directory connector
+- an `Incident Copilot Demo` local-directory connector
 - work items
 - inbox items
 - reviews
@@ -27,16 +27,35 @@ Demo login:
 - `dave@hartwell.com`
 - `demo1234`
 
-## 2. Verify the Seed
+## 2. Sign In And Use The Worker-First Proof
+
+Open:
+
+- `/workspace/setup`
+
+Then:
+
+1. click `Run sample activity`
+2. land on the follow-up worker proof rail
+3. open the latest inbox/work state if it already exists
+4. otherwise run the sample activity button
+
+What this should prove immediately:
+
+- the worker-first setup path is real in the UI
+- a live input can create durable inbox/work/activity state
+- the product stays legible while the worker is being brought live
+
+## 3. Verify The Seed
 
 ```bash
 ./scripts/verify-seed.sh
 ```
 
 This checks that the main workspace APIs return the expected categories of data,
-including the seeded `Company Docs` connector and its initial sync job.
+including the seeded `Incident Copilot Demo` connector and its initial sync job.
 
-## 3. Open the Main Product Surfaces
+## 4. Open The Main Product Surfaces
 
 After logging in as Dave, open:
 
@@ -49,7 +68,7 @@ After logging in as Dave, open:
 
 You should be able to understand the demo without touching code or hidden routes.
 
-## 4. Rehearse the Core Ingress and Review Loop
+## 5. Rehearse The Core Ingress And Review Loop
 
 ### Forwarded email
 
@@ -72,7 +91,7 @@ Then confirm:
 
 Use this to confirm the core review loop without involving external delivery.
 
-## 5. Rehearse Reviewed Send
+## 6. Rehearse Reviewed Send
 
 ```bash
 ./scripts/test-smtp-send.sh
@@ -83,7 +102,7 @@ Interpret the result honestly:
 - if SMTP is configured, the send should execute and record outcome truth
 - if SMTP is not configured, the script now reports that the review stays pending until configuration is fixed
 
-## 6. Rehearse the Full Public-Try Flow
+## 7. Rehearse The Full Public-Try Flow
 
 ```bash
 pnpm smoke:public-try
@@ -91,9 +110,9 @@ pnpm smoke:public-try
 
 This is the fastest consolidated check of the main ingress and reviewed-send seams.
 
-## 7. Optional: Rehearse Retrieval
+## 8. Optional: Rehearse Retrieval
 
-Inspect the seeded `Company Docs` connector first, then run:
+Inspect the seeded `Incident Copilot Demo` connector first, then run:
 
 ```bash
 pnpm smoke:connector-sync
@@ -106,7 +125,7 @@ you have confirmed the seeded path works.
 
 This proves the retrieval-backed path independently of Gmail.
 
-## 8. Optional: Configure Gmail
+## 9. Optional: Configure Gmail
 
 Gmail is optional for first value, but if you want to test watched inbox:
 
@@ -125,6 +144,7 @@ Remember:
 
 By the end of a strong first run you should have proved:
 
+- the worker-first setup path can create real state without scripts
 - workers are installable and legible
 - ingress creates durable inbox/work truth
 - reviews gate consequential actions
@@ -133,6 +153,7 @@ By the end of a strong first run you should have proved:
 
 ## See Also
 
+- [Demo Walkthrough](./demo-walkthrough.md)
 - [Getting Started](./getting-started.md)
 - [Verification and Testing](./verification-and-testing.md)
 - [Known Limitations](./known-limitations.md)

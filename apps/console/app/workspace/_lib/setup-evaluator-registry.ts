@@ -9,12 +9,14 @@
  * its step is complete.
  */
 import type {
+  WorkspaceInboxItemRecord,
   WorkspaceActionCapabilityRecord,
   ConnectorRecord,
   ConnectorSyncJobRecord,
   WorkspaceConnectionRecord,
   WorkspaceInputRouteRecord,
   WorkspaceWorkerRecord,
+  WorkspaceWorkItemRecord,
 } from "@/lib/control-plane";
 
 export type SetupEvaluatorContext = {
@@ -22,6 +24,8 @@ export type SetupEvaluatorContext = {
   connections: WorkspaceConnectionRecord[];
   inputRoutes: WorkspaceInputRouteRecord[];
   actionCapabilities: WorkspaceActionCapabilityRecord[];
+  inboxItems: WorkspaceInboxItemRecord[];
+  workItems: WorkspaceWorkItemRecord[];
   connectors: ConnectorRecord[];
   syncJobsByConnector: Map<string, ConnectorSyncJobRecord[]>;
 };

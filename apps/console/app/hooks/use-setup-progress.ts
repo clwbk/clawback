@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import {
   listWorkspaceActionCapabilities,
   listWorkspaceConnections,
+  listWorkspaceInbox,
   listWorkspaceInputRoutes,
   listWorkspaceWorkers,
+  listWorkspaceWork,
 } from "@/lib/control-plane";
 import { buildPilotSetupSteps, type PilotSetupStep } from "@/workspace/_lib/setup-progress";
 import {
@@ -26,11 +28,21 @@ export function useSetupProgress(role: "admin" | "user" | null | undefined) {
 
     const load = async () => {
       try {
-        const [workerResult, connectionResult, routeResult, actionResult, connectorState] = await Promise.all([
+        const [
+          workerResult,
+          connectionResult,
+          routeResult,
+          actionResult,
+          inboxResult,
+          workResult,
+          connectorState,
+        ] = await Promise.all([
           listWorkspaceWorkers(),
           listWorkspaceConnections(),
           listWorkspaceInputRoutes(),
           listWorkspaceActionCapabilities(),
+          listWorkspaceInbox(),
+          listWorkspaceWork(),
           loadConnectorSyncState().catch(() => emptyConnectorSyncState),
         ]);
 
@@ -41,6 +53,8 @@ export function useSetupProgress(role: "admin" | "user" | null | undefined) {
               connections: connectionResult.connections,
               inputRoutes: routeResult.input_routes,
               actionCapabilities: actionResult.action_capabilities,
+              inboxItems: inboxResult.items,
+              workItems: workResult.work_items,
               connectors: connectorState.connectors,
               syncJobsByConnector: connectorState.syncJobsByConnector,
             }),

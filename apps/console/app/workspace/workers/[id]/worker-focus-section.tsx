@@ -7,20 +7,34 @@ type WorkerFocusSectionProps = {
 };
 
 const sectionIdMap: Record<string, string> = {
+  people: "people-section",
   connections: "connections-section",
   routes: "routes-section",
   actions: "actions-section",
 };
 
+function resolveFocusElement(focus: string): HTMLElement | null {
+  const sectionId = sectionIdMap[focus];
+  if (sectionId) {
+    return document.getElementById(sectionId);
+  }
+
+  if (focus === "proof") {
+    const candidates = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-worker-focus="proof"]'),
+    );
+    return candidates.find((element) => element.offsetParent !== null) ?? candidates[0] ?? null;
+  }
+
+  return null;
+}
+
 export function WorkerFocusSection({ focus }: WorkerFocusSectionProps) {
   useEffect(() => {
     if (!focus) return;
 
-    const sectionId = sectionIdMap[focus];
-    if (!sectionId) return;
-
     const timeout = setTimeout(() => {
-      const element = document.getElementById(sectionId);
+      const element = resolveFocusElement(focus);
       if (!element) return;
 
       element.scrollIntoView({ behavior: "smooth", block: "start" });

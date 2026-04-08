@@ -28,6 +28,7 @@ import {
 import { listWorkerPacks, installWorkerPack } from "@/lib/control-plane";
 import type { WorkerPackListItem } from "@clawback/contracts";
 import { useSession } from "@/hooks/use-session";
+import { buildWorkerFocusHref } from "./[id]/worker-activation";
 
 export function InstallWorkerDialog({
   children,
@@ -104,7 +105,7 @@ export function InstallWorkerDialog({
       });
       setOpen(false);
       resetForm();
-      router.push(`/workspace/workers/${result.worker_id}`);
+      router.push(buildWorkerFocusHref(result.worker_id, "proof", "workers"));
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to install worker. Please try again.");
@@ -119,10 +120,10 @@ export function InstallWorkerDialog({
         <DialogHeader>
           <div className="flex items-center gap-2">
             <DialogTitle>Add worker</DialogTitle>
-            <HelpTooltip content="Installing a worker provisions the pack-owned routes and actions for that role. After install, open the worker page to assign people, attach Gmail, and confirm the action posture." />
+            <HelpTooltip content="Installing a worker provisions the pack-owned routes and actions for that role. After install, Clawback drops you into that worker's activation guide so you can assign people, confirm inputs, and run a proof flow." />
           </div>
           <DialogDescription>
-            Choose a worker template and configure its identity.
+            Choose a worker template and name it. After install, the worker opens at its activation guide instead of a blank detail page.
           </DialogDescription>
         </DialogHeader>
 
@@ -195,13 +196,13 @@ export function InstallWorkerDialog({
 
           {selectedPack ? (
             <div className="rounded-lg border border-border bg-muted/50 p-3 text-xs text-muted-foreground">
-              After install:
+              After install, Clawback opens the worker activation guide:
               <span className="block mt-1">
-                1. open the worker page, 2. assign members / assignees / reviewers,{" "}
+                1. assign members / assignees / reviewers, 2. confirm the installed routes,{" "}
                 {selectedPack.supported_input_routes.some((r) => r.kind === "watched_inbox")
                   ? "3. attach the read-only connection if the worker uses watched inbox, 4. "
                   : "3. "}
-                confirm the action boundary mode.
+                confirm the action posture, then run sample activity when that template supports it.
               </span>
             </div>
           ) : null}
@@ -216,7 +217,7 @@ export function InstallWorkerDialog({
             Cancel
           </Button>
           <Button onClick={handleInstall} disabled={installing || !selectedPackId || !workerName.trim()}>
-            {installing ? "Installing..." : "Install worker"}
+            {installing ? "Installing..." : "Install and open activation"}
           </Button>
         </DialogFooter>
       </DialogContent>

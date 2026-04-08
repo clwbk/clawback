@@ -14,6 +14,40 @@ pnpm smoke:public-try
 
 That is the public entrypoint for the main verification flow. It runs the core ingress and review path checks in sequence.
 
+For the browser-level worker-first proof that now exists in the console UI, run:
+
+```bash
+pnpm --filter @clawback/console exec playwright test \
+  e2e/worker-demo-proof.e2e.ts
+```
+
+To target a hosted demo or deployed site instead of local dev, set
+`CONSOLE_E2E_BASE_URL` and the relevant credentials:
+
+```bash
+CONSOLE_E2E_BASE_URL=https://demo.clawback.team \
+CONSOLE_E2E_EMAIL=evaluator@hartwell.com \
+CONSOLE_E2E_PASSWORD=publicdemo1 \
+pnpm test:console:demo-evaluator:e2e
+
+CONSOLE_E2E_BASE_URL=https://demo.clawback.team \
+CONSOLE_E2E_ADMIN_EMAIL=... \
+CONSOLE_E2E_ADMIN_PASSWORD=... \
+pnpm test:console:demo-admin:e2e
+```
+
+If the hosted admin login unexpectedly fails while the evaluator login still
+works, reapply the demo seed on the host before treating it as a product
+regression. The seeded Hartwell admin is `dave@hartwell.com`, and the normal
+seed path restores that account's expected password hash.
+
+There is also a manual GitHub Actions workflow for the same hosted-browser
+checks:
+
+- workflow: `Hosted Demo Browser Smoke`
+- required secrets: `DEMO_EVALUATOR_EMAIL`, `DEMO_EVALUATOR_PASSWORD`
+- optional admin secrets: `DEMO_ADMIN_EMAIL`, `DEMO_ADMIN_PASSWORD`
+
 ## 5-Minute Smoke Test
 
 ### 1. Check process health
@@ -34,6 +68,8 @@ Expected:
 
 - `/healthz` returns `200`
 - `/readyz` returns `200` once Postgres and PgBoss are available
+- admin setup reports runtime readiness, including gateway reachability and the
+  expected model-provider key state
 
 ### 2. Seed demo data if you want a realistic workspace
 
@@ -166,9 +202,33 @@ What they prove:
 - retrieval-backed answers can be grounded in synced content
 - a governed action can still run on top of that retrieval-backed worker flow
 
-Read [0.4 Beta Current Limitations](../beta/0.4-current-limitations.md) and
-[0.4 Signoff](../beta/0.4-signoff-2026-03-26.md) for the current retrieval
-claim and its limits.
+Read [Known Limitations](./known-limitations.md) and
+[Demo Walkthrough](./demo-walkthrough.md) for the current public retrieval
+story and its limits.
+
+## Browser Proof Paths
+
+### Worker-first admin proof
+
+1. Sign in as `dave@hartwell.com` / `demo1234`
+2. Open `/workspace/setup`
+3. Click `Run sample activity`
+4. On the worker proof rail, either open the latest inbox/work item or run the sample activity button
+5. Confirm you land in real `/workspace/inbox`, `/workspace/work/:id`, or `/workspace/activity` state
+
+That path proves the current worker-first setup flow is alive in the UI and not
+just in backend scripts.
+
+### Retrieval-first evaluator proof
+
+1. Open `/workspace/connectors`
+2. Confirm the seeded `Incident Copilot Demo` connector has a completed sync
+3. Open `/workspace/chat`
+4. Use `Incident Copilot`
+5. Inspect the resulting review/work state in `/workspace/inbox` and `/workspace/work`
+
+That path proves the no-Google retrieval story still works alongside the
+worker-first admin path.
 
 ## Script Reference
 
@@ -193,6 +253,8 @@ After deploying with `docker-compose.prod.yml`, verify:
 - [ ] `docker compose ps` shows healthy containers
 - [ ] `/healthz` returns `200`
 - [ ] `/readyz` returns `200`
+- [ ] admin setup shows runtime readiness as `ready`, or any degraded/blocked
+  state is understood and intentional
 - [ ] the console loads in a browser
 - [ ] login succeeds
 
@@ -208,6 +270,11 @@ After deploying with `docker-compose.prod.yml`, verify:
 - [ ] forward-email webhook works if configured
 - [ ] Gmail setup card works if configured
 - [ ] SMTP relay status is truthful if configured
+
+### Hosted browser proof
+
+- [ ] `pnpm test:console:demo-evaluator:e2e` passes against the public demo URL
+- [ ] `pnpm test:console:demo-admin:e2e` passes against the admin demo URL when admin creds are available
 
 ### Security / config
 
@@ -241,6 +308,7 @@ For higher-signal whole-system checks that go beyond backend Vitest:
 pnpm test:console
 pnpm test:env
 pnpm test:console:first-run:e2e
+pnpm --filter @clawback/console exec playwright test e2e/worker-demo-proof.e2e.ts
 pnpm --filter @clawback/db test
 pnpm test:migration-proof
 pnpm test:deployed-stack
@@ -253,6 +321,9 @@ What these add:
   currently skips
 - `pnpm test:console:first-run:e2e` proves the seeded no-Google knowledge path
   is discoverable in the actual browser UI
+- `pnpm --filter @clawback/console exec playwright test e2e/worker-demo-proof.e2e.ts`
+  proves the setup page can reach the worker proof rail and open real product
+  state from there
 - `pnpm --filter @clawback/db test` statically checks the migration journal and
   catches duplicate-column and journal-integrity issues
 - `pnpm test:migration-proof` proves the migration chain works against a fresh
@@ -265,5 +336,4 @@ What these add:
 - [Deployment Guide](./deployment.md)
 - [Troubleshooting](./troubleshooting.md)
 - [Known Limitations](./known-limitations.md)
-- [0.4 Beta Current Limitations](../beta/0.4-current-limitations.md)
-- [0.4 Signoff](../beta/0.4-signoff-2026-03-26.md)
+- [Demo Walkthrough](./demo-walkthrough.md)

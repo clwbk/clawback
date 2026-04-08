@@ -51,14 +51,31 @@ Then sign in as:
 - `dave@hartwell.com`
 - `demo1234`
 
+## Choose a first-run proof
+
+For the new worker-first admin path:
+
+- open `/workspace/setup`
+- click `Run sample activity`
+- land on the follow-up worker proof rail
+- run the sample intake if fresh inbox/work state is not already present
+
+For the retrieval-first no-Google path:
+
+- open `/workspace/connectors`
+- confirm the seeded `Incident Copilot Demo` sync is complete
+- open `/workspace/chat`
+- use `Incident Copilot`
+
 ## What to open first
 
+- `/workspace/setup` for the worker-first activation and proof path
 - `/workspace/workers` to install or inspect workers
 - `/workspace/inbox` to review gated actions and suggestions
 - `/workspace/work` to inspect durable outputs and execution state
 - `/workspace/activity` to read the audit trail
 - `/workspace/connections` to manage the seeded Gmail, SMTP, Calendar, and Drive connections
-- `/workspace/connectors` to inspect the seeded `Company Docs` connector or add another local-directory connector for retrieval
+- `/workspace/connectors` to inspect the seeded `Incident Copilot Demo` connector or add another local-directory connector for retrieval
 
 ## Run the main verification flow
 
@@ -75,6 +92,8 @@ Notes:
 
 ## Next steps
 
+- [Start Here](./start-here.md)
+- [Demo Walkthrough](./demo-walkthrough.md)
 - [Getting Started](./getting-started.md)
 - [First-Run Guide](./first-run.md)
 - [Admin Guide](./admin-guide.md)

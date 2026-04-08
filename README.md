@@ -127,11 +127,15 @@ Docker configuration, and runtime setup.
 
 If you are trying the product:
 
+- [`docs/guides/public-demo.md`](docs/guides/public-demo.md) — best hosted-demo path and talk track
 - [`docs/guides/quickstart.md`](docs/guides/quickstart.md) — fastest local path
 - [`docs/guides/deployment.md`](docs/guides/deployment.md) — supported single-node deployment
 - [`docs/guides/verification-and-testing.md`](docs/guides/verification-and-testing.md) — smoke tests and verification
+- [`docs/guides/troubleshooting.md`](docs/guides/troubleshooting.md) — common setup and runtime problems
 - [`docs/guides/known-limitations.md`](docs/guides/known-limitations.md) — honest current limits
+- [`CHANGELOG.md`](CHANGELOG.md) — public release notes
 - [`docs/beta/0.4-signoff-2026-03-26.md`](docs/beta/0.4-signoff-2026-03-26.md) — what the current beta claim does and does not prove
+- [`docs/beta/public-release-closeout-2026-03-29.md`](docs/beta/public-release-closeout-2026-03-29.md) — current bounded public-ship status and checklist
 
 If you are contributing:
 
@@ -151,6 +155,7 @@ Reference docs:
 
 Clawback is a TypeScript monorepo:
 
+- public site code lives in the private source repo and is not mirrored here
 - `apps/console` — Next.js frontend (the workspace UI)
 - `services/control-plane` — Fastify API (workers, reviews, actions)
 - `packages/contracts` — shared types between frontend and backend

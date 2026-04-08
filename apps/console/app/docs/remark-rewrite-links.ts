@@ -11,10 +11,12 @@ export function remarkRewriteDocLinks() {
   return (tree: Root) => {
     visit(tree, "link", (node) => {
       const href = node.url;
-      // Match ./slug.md or slug.md (relative markdown links)
-      const match = href.match(/^(?:\.\/)?([a-z][a-z0-9-]*)\.md$/);
+      // Match ./slug.md, slug.md, or ../guides/slug.md with an optional anchor.
+      const match = href.match(
+        /^(?:\.\/|(?:\.\.\/guides\/))?([a-z][a-z0-9-]*)\.md(#.+)?$/,
+      );
       if (match) {
-        node.url = `/docs/${match[1]}`;
+        node.url = `/docs/${match[1]}${match[2] ?? ""}`;
       }
     });
   };

@@ -30,17 +30,22 @@ services:
     restart: unless-stopped
 
   openclaw-init:
-    image: alpine:3.20
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
     user: "0:0"
+    environment:
+      CLAWBACK_RUNTIME_API_TOKEN: ${CLAWBACK_RUNTIME_API_TOKEN:?CLAWBACK_RUNTIME_API_TOKEN is required}
+      OPENCLAW_PLUGIN_CONTROL_PLANE_URL: ${OPENCLAW_PLUGIN_CONTROL_PLANE_URL:-http://control-plane:3001}
     command:
       [
         "sh",
         "-lc",
-        "mkdir -p /home/node/.openclaw/workspace /home/node/.openclaw/identity /home/node/.openclaw/canvas /home/node/.openclaw/cron && chown -R 1000:1000 /home/node/.openclaw"
+        "mkdir -p /home/node/.openclaw/workspace /home/node/.openclaw/identity /home/node/.openclaw/canvas /home/node/.openclaw/cron /home/node/.openclaw/extensions && cp -R /bootstrap/extensions/. /home/node/.openclaw/extensions/ && node -e \"const fs = require('node:fs'); const path = require('node:path'); const root = '/home/node/.openclaw'; const configPath = path.join(root, 'openclaw.json'); const bootstrapPath = '/bootstrap/openclaw.prod.json'; let config = {}; if (fs.existsSync(configPath) && fs.statSync(configPath).size > 0) { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } else if (fs.existsSync(bootstrapPath)) { config = JSON.parse(fs.readFileSync(bootstrapPath, 'utf8')); } const gateway = config.gateway && typeof config.gateway === 'object' ? config.gateway : {}; const gatewayControlUi = gateway.controlUi && typeof gateway.controlUi === 'object' ? gateway.controlUi : {}; const plugins = config.plugins && typeof config.plugins === 'object' ? config.plugins : {}; const entries = plugins.entries && typeof plugins.entries === 'object' ? plugins.entries : {}; for (const pluginId of ['clawback-tools', 'follow-up-tools']) { const existingEntry = entries[pluginId] && typeof entries[pluginId] === 'object' ? entries[pluginId] : {}; const existingConfig = existingEntry.config && typeof existingEntry.config === 'object' ? existingEntry.config : {}; entries[pluginId] = { ...existingEntry, enabled: true, config: { ...existingConfig, controlPlaneBaseUrl: process.env.OPENCLAW_PLUGIN_CONTROL_PLANE_URL || 'http://control-plane:3001', runtimeApiToken: process.env.CLAWBACK_RUNTIME_API_TOKEN || '' } }; } config = { ...config, gateway: { ...gateway, controlUi: { ...gatewayControlUi, dangerouslyAllowHostHeaderOriginFallback: true } }, plugins: { ...plugins, entries } }; fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\\n', 'utf8');\" && chown -R 1000:1000 /home/node/.openclaw"
       ]
     volumes:
       - openclaw-config:/home/node/.openclaw
       - openclaw-workspace:/home/node/.openclaw/workspace
+      - ./infra/openclaw/openclaw.prod.json:/bootstrap/openclaw.prod.json:ro
+      - ./openclaw-plugins:/bootstrap/extensions:ro
     restart: "no"
 
   openclaw:
@@ -79,7 +84,6 @@ services:
     volumes:
       - openclaw-config:/home/node/.openclaw
       - openclaw-workspace:/home/node/.openclaw/workspace
-      - ./infra/openclaw/openclaw.prod.json:/home/node/.openclaw/openclaw.json:ro
     restart: unless-stopped
 
   migrate:
@@ -99,6 +103,7 @@ services:
     build:
       context: .
       dockerfile: services/control-plane/Dockerfile
+    user: "1000:1000"
     environment:
       NODE_ENV: production
       CONTROL_PLANE_PORT: "3001"
@@ -143,13 +148,13 @@ services:
     volumes:
       - openclaw-config:/runtime/openclaw/config
       - openclaw-workspace:/runtime/openclaw/workspace
-      - ./infra/openclaw/openclaw.prod.json:/runtime/openclaw/config/openclaw.json:ro
     restart: unless-stopped
 
   runtime-worker:
     build:
       context: .
       dockerfile: services/runtime-worker/Dockerfile
+    user: "1000:1000"
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://${POSTGRES_USER:-clawback}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-clawback}
@@ -170,16 +175,18 @@ services:
     volumes:
       - openclaw-config:/runtime/openclaw/config
       - openclaw-workspace:/runtime/openclaw/workspace
-      - ./infra/openclaw/openclaw.prod.json:/runtime/openclaw/config/openclaw.json:ro
     restart: unless-stopped
 
   console:
     build:
       context: .
       dockerfile: apps/console/Dockerfile
+      args:
+        NEXT_PUBLIC_PUBLIC_DEMO_MODE: ${NEXT_PUBLIC_PUBLIC_DEMO_MODE:-false}
     environment:
       NODE_ENV: production
       CONTROL_PLANE_INTERNAL_URL: ${CONTROL_PLANE_INTERNAL_URL:-http://control-plane:3001}
+      NEXT_PUBLIC_PUBLIC_DEMO_MODE: ${NEXT_PUBLIC_PUBLIC_DEMO_MODE:-false}
     ports:
       - "127.0.0.1:${CONSOLE_PORT:-3000}:3000"
     depends_on:

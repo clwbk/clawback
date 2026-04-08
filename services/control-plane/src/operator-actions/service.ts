@@ -4,13 +4,19 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { OpenClawGatewayClient } from "@clawback/model-adapters";
+
 import type {
   OperatorActionsServiceContract,
   RuntimeControlStatus,
+  RuntimeReadinessCheck,
+  RuntimeReadinessStatus,
   RuntimeRestartResult,
 } from "./types.js";
 
 type CommandRunner = (params: { command: string; args: string[]; cwd: string }) => Promise<void>;
+type GatewayClientLike = Pick<OpenClawGatewayClient, "request" | "close">;
+type GatewayClientFactory = (options?: ConstructorParameters<typeof OpenClawGatewayClient>[0]) => GatewayClientLike;
 
 type LocalOperatorActionsServiceOptions = {
   enabled?: boolean;
@@ -20,6 +26,7 @@ type LocalOperatorActionsServiceOptions = {
   runCommand?: CommandRunner;
   restartPollIntervalMs?: number;
   restartTimeoutMs?: number;
+  gatewayClientFactory?: GatewayClientFactory;
 };
 
 type RuntimeWorkerHeartbeat = {
@@ -46,6 +53,90 @@ function defaultEnabled(env: NodeJS.ProcessEnv) {
 
 function defaultNow() {
   return new Date();
+}
+
+function normalizeSecret(value: string | undefined) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function resolveProviderEnvVar(provider: string | null) {
+  if (!provider) {
+    return null;
+  }
+
+  switch (provider) {
+    case "openai":
+      return "OPENAI_API_KEY";
+    case "openrouter":
+      return "OPENROUTER_API_KEY";
+    case "anthropic":
+      return "ANTHROPIC_API_KEY";
+    case "ollama":
+      return "OLLAMA_API_KEY";
+    default:
+      return null;
+  }
+}
+
+function parseProviderFromModelRef(modelRef: string | null) {
+  if (!modelRef) {
+    return null;
+  }
+
+  const [provider] = modelRef.split("/", 1);
+  return provider?.trim() ? provider.trim() : null;
+}
+
+function toObjectRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function toStringOrNull(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function discoverGatewayPrimaryModel(value: unknown) {
+  const root = toObjectRecord(value);
+  const candidates = [
+    toStringOrNull(toObjectRecord(toObjectRecord(root.mainAgent).model).primary),
+    toStringOrNull(toObjectRecord(toObjectRecord(root.main_agent).model).primary),
+    toStringOrNull(toObjectRecord(toObjectRecord(root.agent).model).primary),
+    toStringOrNull(toObjectRecord(root.model).primary),
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  const rawAgents = toObjectRecord(root.agents).list;
+  if (!Array.isArray(rawAgents)) {
+    return null;
+  }
+
+  const preferredEntry =
+    rawAgents.find((entry) => {
+      const id = toStringOrNull(toObjectRecord(entry).id);
+      return id !== null && !id.startsWith("cb_");
+    }) ?? rawAgents[0];
+
+  return toStringOrNull(toObjectRecord(toObjectRecord(preferredEntry).model).primary);
+}
+
+function countPublishedAgents(value: unknown) {
+  const root = toObjectRecord(value);
+  const rawAgents = toObjectRecord(root.agents).list;
+  if (!Array.isArray(rawAgents)) {
+    return 0;
+  }
+
+  return rawAgents.filter((entry) => {
+    const id = toStringOrNull(toObjectRecord(entry).id);
+    return id !== null && id.startsWith("cb_");
+  }).length;
 }
 
 async function defaultRunCommand(params: {
@@ -117,6 +208,7 @@ export class LocalOperatorActionsService implements OperatorActionsServiceContra
   private readonly repoRootPromise: Promise<string>;
   private readonly restartPollIntervalMs: number;
   private readonly restartTimeoutMs: number;
+  private readonly gatewayClientFactory: GatewayClientFactory;
   private inFlightRestart: Promise<RuntimeRestartResult> | null = null;
   private inFlightWorkerRestart: Promise<RuntimeRestartResult> | null = null;
 
@@ -127,6 +219,7 @@ export class LocalOperatorActionsService implements OperatorActionsServiceContra
     this.runCommand = options.runCommand ?? defaultRunCommand;
     this.restartPollIntervalMs = options.restartPollIntervalMs ?? 250;
     this.restartTimeoutMs = options.restartTimeoutMs ?? 10_000;
+    this.gatewayClientFactory = options.gatewayClientFactory ?? ((clientOptions) => new OpenClawGatewayClient(clientOptions));
     this.repoRootPromise = Promise.resolve(
       options.repoRoot ??
         findRepoRoot(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..")),
@@ -221,6 +314,124 @@ export class LocalOperatorActionsService implements OperatorActionsServiceContra
       target: "runtime_worker",
       label: "Restart Runtime Worker",
       reason: null,
+    };
+  }
+
+  async getRuntimeReadinessStatus(): Promise<RuntimeReadinessStatus> {
+    const configuredProvider = this.env.OPENCLAW_MODEL_PROVIDER_NAME ?? "openai";
+    const configuredProviderEnvVar = resolveProviderEnvVar(configuredProvider);
+    const configuredProviderKeyPresent =
+      configuredProviderEnvVar !== null && normalizeSecret(this.env[configuredProviderEnvVar]);
+
+    const checks: RuntimeReadinessStatus["checks"] = {
+      gateway: {
+        ok: false,
+        summary: "OpenClaw gateway is not reachable.",
+        detail: "The control plane could not read runtime config from OpenClaw.",
+      },
+      configured_provider_key: {
+        ok: configuredProviderEnvVar === null ? true : configuredProviderKeyPresent,
+        summary:
+          configuredProviderEnvVar === null
+            ? `Configured provider ${configuredProvider} does not use a known env-var mapping.`
+            : configuredProviderKeyPresent
+              ? `${configuredProviderEnvVar} is present for the configured ${configuredProvider} provider.`
+              : `${configuredProviderEnvVar} is missing for the configured ${configuredProvider} provider.`,
+        detail:
+          configuredProviderEnvVar === null
+            ? "Clawback cannot verify provider-key presence for this runtime provider automatically."
+            : configuredProviderKeyPresent
+              ? null
+              : `Set ${configuredProviderEnvVar} on the host that runs OpenClaw and restart the stack.`,
+      },
+      gateway_main_provider_key: null,
+    };
+
+    let gatewayMainModel: string | null = null;
+    let gatewayMainProvider: string | null = null;
+    let gatewayMainProviderEnvVar: string | null = null;
+    let gatewayMainProviderKeyPresent: boolean | null = null;
+    let publishedAgentCount = 0;
+
+    try {
+      const client = this.gatewayClientFactory({
+        clientId: "gateway-client",
+        clientMode: "backend",
+        clientDisplayName: "Clawback Runtime Status",
+        caps: ["tool-events"],
+      });
+      try {
+        const config = await client.request<{ value?: unknown }>("config.get", {});
+        gatewayMainModel = discoverGatewayPrimaryModel(config?.value);
+        gatewayMainProvider = parseProviderFromModelRef(gatewayMainModel);
+        gatewayMainProviderEnvVar = resolveProviderEnvVar(gatewayMainProvider);
+        gatewayMainProviderKeyPresent =
+          gatewayMainProviderEnvVar === null
+            ? null
+            : normalizeSecret(this.env[gatewayMainProviderEnvVar]);
+        publishedAgentCount = countPublishedAgents(config?.value);
+      } finally {
+        await client.close().catch(() => undefined);
+      }
+
+      checks.gateway = {
+        ok: true,
+        summary: "OpenClaw gateway responded to config.get.",
+        detail:
+          gatewayMainModel !== null
+            ? `Gateway primary model appears to be ${gatewayMainModel}.`
+            : "Gateway responded, but no primary model was discovered from the config snapshot.",
+      };
+    } catch (error) {
+      checks.gateway = {
+        ok: false,
+        summary: "OpenClaw gateway is not reachable.",
+        detail: error instanceof Error ? error.message : "config.get failed.",
+      };
+    }
+
+    if (gatewayMainProvider !== null) {
+      checks.gateway_main_provider_key = {
+        ok:
+          gatewayMainProviderEnvVar === null
+            ? true
+            : gatewayMainProviderKeyPresent === true,
+        summary:
+          gatewayMainProviderEnvVar === null
+            ? `Gateway primary provider ${gatewayMainProvider} does not use a known env-var mapping.`
+            : gatewayMainProviderKeyPresent
+              ? `${gatewayMainProviderEnvVar} is present for the gateway primary provider ${gatewayMainProvider}.`
+              : `${gatewayMainProviderEnvVar} is missing for the gateway primary provider ${gatewayMainProvider}.`,
+        detail:
+          gatewayMainProviderEnvVar === null
+            ? "Clawback cannot verify provider-key presence for the discovered gateway provider automatically."
+            : gatewayMainProviderKeyPresent
+              ? null
+              : `The gateway looks configured for ${gatewayMainModel ?? gatewayMainProvider}. Add ${gatewayMainProviderEnvVar} on the host or align the runtime model provider.`,
+      };
+    }
+
+    const blockingChecks = [
+      checks.gateway.ok,
+      checks.configured_provider_key.ok,
+      checks.gateway_main_provider_key?.ok ?? true,
+    ];
+    const ok = blockingChecks.every(Boolean);
+    const providerMismatch =
+      gatewayMainProvider !== null && gatewayMainProvider !== configuredProvider;
+
+    return {
+      ok,
+      status: ok ? (providerMismatch ? "degraded" : "ready") : "blocked",
+      configured_provider: configuredProvider,
+      configured_provider_env_var: configuredProviderEnvVar,
+      configured_provider_key_present: configuredProviderKeyPresent,
+      gateway_main_model: gatewayMainModel,
+      gateway_main_provider: gatewayMainProvider,
+      gateway_main_provider_env_var: gatewayMainProviderEnvVar,
+      gateway_main_provider_key_present: gatewayMainProviderKeyPresent,
+      published_agent_count: publishedAgentCount,
+      checks,
     };
   }
 

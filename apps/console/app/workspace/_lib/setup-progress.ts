@@ -5,8 +5,10 @@ import type {
   RegistrySetupStep,
   WorkspaceActionCapabilityRecord,
   WorkspaceConnectionRecord,
+  WorkspaceInboxItemRecord,
   WorkspaceInputRouteRecord,
   WorkspaceWorkerRecord,
+  WorkspaceWorkItemRecord,
 } from "@/lib/control-plane";
 import {
   getSetupEvaluator,
@@ -30,6 +32,8 @@ type BuildPilotSetupStepsInput = {
   connections: WorkspaceConnectionRecord[];
   inputRoutes: WorkspaceInputRouteRecord[];
   actionCapabilities: WorkspaceActionCapabilityRecord[];
+  inboxItems?: WorkspaceInboxItemRecord[] | undefined;
+  workItems?: WorkspaceWorkItemRecord[] | undefined;
   connectors: ConnectorRecord[];
   syncJobsByConnector: Map<string, ConnectorSyncJobRecord[]>;
   /** Optional registry metadata for enriching step labels/descriptions */
@@ -105,7 +109,7 @@ const KNOWLEDGE_CONNECTOR_STEP: RegisteredStepConfig = {
   stepId: "seeded-knowledge-ready",
   fallbackTitle: "Confirm seeded knowledge source",
   fallbackDescription:
-    "Open Knowledge, confirm the seeded Company Docs connector exists, and verify that at least one sync has indexed real documents.",
+    "Open Knowledge, confirm the seeded incident demo connector exists, and verify that at least one sync has indexed real documents.",
   fallbackCtaLabel: "Open Knowledge",
   buildHref: () => "/workspace/connectors",
 };
@@ -182,11 +186,26 @@ const REVIEWED_SEND_STEP: RegisteredStepConfig = {
       : "/workspace/workers",
 };
 
+const DEMO_ACTIVITY_STEP: RegisteredStepConfig = {
+  pluginId: "demo.follow-up",
+  stepId: "run-sample-activity",
+  fallbackTitle: "Run sample activity",
+  fallbackDescription:
+    "Open the worker proof step, run one sample intake, and watch inbox, work, and activity fill with real state.",
+  fallbackCtaLabel: "Run sample activity",
+  buildHref: (followUpWorkerId) =>
+    followUpWorkerId
+      ? `/workspace/workers/${followUpWorkerId}?focus=proof`
+      : "/workspace/workers",
+};
+
 export function buildPilotSetupSteps({
   workers,
   connections,
   inputRoutes,
   actionCapabilities,
+  inboxItems = [],
+  workItems = [],
   connectors,
   syncJobsByConnector,
   providerMeta,
@@ -196,6 +215,8 @@ export function buildPilotSetupSteps({
     connections,
     inputRoutes,
     actionCapabilities,
+    inboxItems,
+    workItems,
     connectors,
     syncJobsByConnector,
   };
@@ -214,6 +235,7 @@ export function buildPilotSetupSteps({
     buildRegisteredStep(KNOWLEDGE_CONNECTOR_STEP, undefined, evaluatorCtx, followUpWorkerId),
     buildRegisteredStep(INSTALL_WORKER_STEP, undefined, evaluatorCtx, followUpWorkerId),
     buildRegisteredStep(FORWARDED_EMAIL_STEP, undefined, evaluatorCtx, followUpWorkerId),
+    buildRegisteredStep(DEMO_ACTIVITY_STEP, undefined, evaluatorCtx, followUpWorkerId),
     buildRegisteredStep(SMTP_CONFIGURE_STEP, smtpMeta, evaluatorCtx, followUpWorkerId),
     buildRegisteredStep(REVIEWED_SEND_STEP, undefined, evaluatorCtx, followUpWorkerId),
     buildRegisteredStep(GMAIL_CONNECT_STEP, gmailMeta, evaluatorCtx, followUpWorkerId),

@@ -15,10 +15,34 @@
 
 set -euo pipefail
 
-# Resolve port: prefer CONTROL_PLANE_URL, then CONTROL_PLANE_PORT, then default 3001.
-# start-local.sh exports CONTROL_PLANE_PORT=3011; pnpm dev uses 3001.
-_PORT="${CONTROL_PLANE_PORT:-3001}"
-BASE_URL="${CONTROL_PLANE_URL:-http://localhost:${_PORT}}"
+resolve_base_url() {
+  if [ -n "${CONTROL_PLANE_URL:-}" ]; then
+    echo "${CONTROL_PLANE_URL}"
+    return
+  fi
+
+  if [ -n "${CONTROL_PLANE_PORT:-}" ]; then
+    echo "http://localhost:${CONTROL_PLANE_PORT}"
+    return
+  fi
+
+  # Probe the common local dev ports so the verifier works both with:
+  # - `pnpm dev` on :3001
+  # - `./scripts/start-local.sh` on :3011
+  if curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/healthz 2>/dev/null | grep -q '^200$'; then
+    echo "http://localhost:3001"
+    return
+  fi
+
+  if curl -s -o /dev/null -w "%{http_code}" http://localhost:3011/healthz 2>/dev/null | grep -q '^200$'; then
+    echo "http://localhost:3011"
+    return
+  fi
+
+  echo "http://localhost:3001"
+}
+
+BASE_URL="$(resolve_base_url)"
 API_TOKEN="${CLAWBACK_RUNTIME_API_TOKEN:-clawback-local-runtime-api-token}"
 INBOUND_WEBHOOK_TOKEN="${CLAWBACK_INBOUND_EMAIL_WEBHOOK_TOKEN:-clawback-local-inbound-email-token}"
 GMAIL_WATCH_HOOK_TOKEN="${CLAWBACK_GMAIL_WATCH_HOOK_TOKEN:-clawback-local-gmail-watch-token}"

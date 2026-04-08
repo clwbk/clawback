@@ -328,6 +328,15 @@ export class ReviewResolutionService {
       const completedState = executionState
         ? runtimePack.runtime.hooks.markCompleted(executionState, "review_approved")
         : null;
+      if (workItem.status !== "sent" || workItem.execution_status !== "completed") {
+        await this.options.workItemService.update(workspaceId, workItem.id, {
+          status: "sent",
+          executionStatus: "completed",
+          executionError: null,
+          executionStateJson: completedState,
+          executionOutcomeJson: priorExecutionOutcome,
+        });
+      }
       await this.options.reviewService.setStatus(workspaceId, review.id, "completed");
       if (completedState) {
         await this.syncFollowUpReviewExecutionState(workspaceId, review, completedState, {
@@ -452,6 +461,13 @@ export class ReviewResolutionService {
       const sentExecutionOutcome = markReviewedSendExecutionSent(runningExecutionOutcome, {
         providerMessageId: sendResult.providerMessageId,
         sentAt: new Date(),
+      });
+      await this.options.workItemService.update(workspaceId, workItem.id, {
+        status: "approved",
+        executionStatus: "executing",
+        executionError: null,
+        executionStateJson: runningState,
+        executionOutcomeJson: sentExecutionOutcome,
       });
       await this.options.workItemService.update(workspaceId, workItem.id, {
         status: "sent",
@@ -842,7 +858,10 @@ export class ReviewResolutionService {
     );
     const priorExecutionOutcome = this.getReviewedSendExecutionOutcome(workItem.execution_outcome_json);
 
-    if (workItem.status === "sent" && workItem.execution_status === "completed") {
+    if (
+      (workItem.status === "sent" && workItem.execution_status === "completed")
+      || priorExecutionOutcome?.status === "sent"
+    ) {
       return {
         completed: true,
         workItem,

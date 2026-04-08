@@ -1,10 +1,14 @@
+import Link from "next/link";
+
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   listConnectors,
   listConnectorSyncJobs,
 } from "@/lib/control-plane";
 import type { ConnectorRecord, ConnectorSyncJobRecord } from "@/lib/control-plane";
+import { hasReadyKnowledgeConnector } from "../_lib/knowledge-path";
 import { AddConnectorButton } from "./add-connector-button";
 import { SyncConnectorButton } from "./sync-connector-button";
 
@@ -72,6 +76,8 @@ export default async function ConnectorsPage() {
     usingFixtureFallback = true;
   }
 
+  const knowledgeReady = hasReadyKnowledgeConnector(connectors, syncJobsByConnector);
+
   return (
     <div className="h-full overflow-y-auto bg-background">
       <div className="mx-auto max-w-5xl space-y-8 px-6 py-10">
@@ -87,7 +93,7 @@ export default async function ConnectorsPage() {
               Knowledge sources
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Connect local directories to index documents for retrieval. Synced content is available as context for workers, and the seeded Company Docs source is the default no-Google first-value path.
+              Connect local directories to index documents for retrieval. Synced content is available as context for workers, and the seeded Incident Copilot Demo source is the default public demo path.
             </p>
           </div>
           <AddConnectorButton />
@@ -99,6 +105,25 @@ export default async function ConnectorsPage() {
             {connectors.filter((c) => c.status === "active").length} active
           </Badge>
         </div>
+
+        {knowledgeReady ? (
+          <Card className="border-emerald-500/20 bg-emerald-500/5">
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Retrieval is ready
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  A local knowledge source has already been indexed. The next honest proof is to
+                  open Chat and run a grounded prompt through Incident Copilot.
+                </p>
+              </div>
+              <Button asChild>
+                <Link href="/workspace/chat">Try grounded chat</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
 
         {connectors.length === 0 && !usingFixtureFallback ? (
           <Card>

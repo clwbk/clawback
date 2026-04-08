@@ -1,12 +1,13 @@
 "use client";
 
-import { Suspense, useCallback, useRef } from "react";
 import Link from "next/link";
+import { Suspense, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
 import { useApprovalSummary } from "@/hooks/use-approval-summary";
 import { useAgents } from "@/hooks/use-agents";
 import { useConversations } from "@/hooks/use-conversations";
+import { useWorkspaceRail } from "@/hooks/use-workspace-rail";
 import { useRunStream } from "@/hooks/use-run-stream";
 import { AppShell } from "@/components/layout/app-shell";
 import { IconRail } from "@/components/navigation/icon-rail";
@@ -21,8 +22,10 @@ import {
   pathToWorkspaceSection,
   workspaceSectionToPath,
 } from "@/lib/workspace-navigation";
+import { suggestAssistantTemplate } from "@/lib/assistant-templates";
 
 type Notice = { tone: "error" | "success" | "info"; message: string };
+const STREAM_END_RELOAD_RETRY_DELAYS_MS = [0, 500, 1500] as const;
 
 function ChatPageInner() {
   const { session, loading: sessionLoading } = useSession();
@@ -33,6 +36,7 @@ function ChatPageInner() {
   const requestedConversationId = searchParams.get("conversation");
 
   const noticeRef = useRef<Notice | null>(null);
+  const pendingStreamEndReloadsRef = useRef(new Set<string>());
   const onNotice = useCallback((n: Notice | null) => {
     noticeRef.current = n;
   }, []);
@@ -62,9 +66,44 @@ function ChatPageInner() {
 
   const onStreamEnd = useCallback(
     (conversationId: string, runId: string) => {
-      void convHandlers.loadConversationState(conversationId, runId, { keepDrafts: false });
+      if (pendingStreamEndReloadsRef.current.has(runId)) {
+        return;
+      }
+
+      pendingStreamEndReloadsRef.current.add(runId);
+      void (async () => {
+        try {
+          for (const delayMs of STREAM_END_RELOAD_RETRY_DELAYS_MS) {
+            if (delayMs > 0) {
+              await new Promise((resolve) => {
+                setTimeout(resolve, delayMs);
+              });
+            }
+
+            try {
+              await convHandlers.loadConversationState(conversationId, runId, {
+                keepDrafts: false,
+                allowStaleActiveRunFallback: false,
+              });
+              return;
+            } catch (error) {
+              if (delayMs === STREAM_END_RELOAD_RETRY_DELAYS_MS.at(-1)) {
+                onNotice({
+                  tone: "error",
+                  message:
+                    error instanceof Error
+                      ? error.message
+                      : "Failed to reload the conversation after the run finished.",
+                });
+              }
+            }
+          }
+        } finally {
+          pendingStreamEndReloadsRef.current.delete(runId);
+        }
+      })();
     },
-    [convHandlers],
+    [convHandlers, onNotice],
   );
 
   const { isStreaming } = useRunStream(convState.streamTarget, onNotice, onStreamEnd, {
@@ -105,11 +144,37 @@ function ChatPageInner() {
   }
 
   function handleSuggestion(text: string) {
-    convHandlers.setComposerText(text);
+    if (convState.selectedConversationId) {
+      convHandlers.setComposerText(text);
+      return;
+    }
+    const selectedAgentId = agentsState.selectedAgentId;
+    if (!selectedAgentId || !session) return;
+
+    void (async () => {
+      await convHandlers.createConversation({
+        agentId: selectedAgentId,
+        session,
+      });
+      convHandlers.setComposerText(text);
+    })();
   }
 
   const role = isAdmin ? "admin" : "user";
   const { pendingCount } = useApprovalSummary(role);
+  const { railExpanded, toggleRail } = useWorkspaceRail();
+  const starterPrompts =
+    agentsState.selectedAgent
+      ? suggestAssistantTemplate({
+          agentName: agentsState.selectedAgent.name,
+        })?.starterPrompts
+      : undefined;
+  const isSingleAssistantWorkspace = agentsState.agents.length === 1;
+  const composerPlaceholder = !agentsState.selectedAgent
+    ? "Select an assistant first"
+    : !convState.selectedConversationId
+      ? `Create a new thread with ${agentsState.selectedAgent.name}`
+      : `Message ${agentsState.selectedAgent.name}…`;
 
   const panel = (
     <AgentPickerPanel
@@ -134,21 +199,44 @@ function ChatPageInner() {
 
   return (
     <AppShell
+      railExpanded={railExpanded}
       rail={
         <IconRail
           role={role}
           activeSection={activeSection}
           onNavigate={handleNavigate}
           pendingApprovals={pendingCount}
+          expanded={railExpanded}
+          onToggleExpanded={toggleRail}
         />
       }
       panel={panel}
     >
       <div className="grid h-full min-h-0 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex min-h-0 flex-col">
-          <div className="shrink-0 rounded-lg border border-amber-200 bg-amber-50 p-3 mx-4 mt-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
-            This is the legacy chat interface. Workers handle most tasks now.{" "}
-            <Link href="/workspace/workers" className="font-medium underline underline-offset-2">Go to Workers &rarr;</Link>
+          <div className="shrink-0 border-b border-border px-4 py-3">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  {agentsState.selectedAgent
+                    ? `${agentsState.selectedAgent.name} chat`
+                    : "Grounded chat"}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {agentsState.selectedAgent
+                    ? isSingleAssistantWorkspace
+                      ? "This is the retrieval-first lane in the demo workspace. Open Knowledge to inspect the seeded source, or open Workers to inspect the broader worker catalog."
+                      : "Create a thread and run a grounded prompt to see the assistant work."
+                    : "Pick an assistant from the left panel to start a guided conversation."}
+                </p>
+              </div>
+              <Link
+                href="/workspace/connectors"
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Open Knowledge
+              </Link>
+            </div>
           </div>
           <div className="min-h-0 flex-1">
             <ChatThread
@@ -157,9 +245,17 @@ function ChatPageInner() {
               runEventsById={convState.runEventsById}
               assistantDrafts={convState.assistantDrafts}
               streamTarget={convState.streamTarget}
+              assistantName={agentsState.selectedAgent?.name ?? null}
+              hasSelectedConversation={Boolean(convState.selectedConversationId)}
               isAdmin={isAdmin}
               loading={convState.loadingConversationDetail}
               onSuggestion={handleSuggestion}
+              onCreateThread={
+                agentsState.selectedAgentId && !convState.selectedConversationId
+                  ? handleNewThread
+                  : undefined
+              }
+              suggestionChips={starterPrompts}
             />
           </div>
           <ChatComposer
@@ -168,6 +264,7 @@ function ChatPageInner() {
             onSend={handleSend}
             disabled={!convState.selectedConversationId || !session}
             isStreaming={isStreaming}
+            placeholder={composerPlaceholder}
           />
         </div>
         <WorkbenchHost

@@ -19,6 +19,7 @@ import {
   artifactListResponseSchema,
   artifactPathParamsSchema,
   runtimeControlStatusResponseSchema,
+  runtimeReadinessResponseSchema,
   runtimeRestartResponseSchema,
   approvalPathParamsSchema,
   agentPathParamsSchema,
@@ -74,10 +75,7 @@ import {
   updateAgentDraftRequestSchema,
   updateAgentRequestSchema,
 } from "@clawback/contracts";
-import {
-  ActionService,
-  type ActionServiceContract,
-} from "./actions/index.js";
+import { ActionService, type ActionServiceContract } from "./actions/index.js";
 import {
   ArtifactService,
   type ArtifactServiceContract,
@@ -93,7 +91,11 @@ import {
 import { createDb, createPool } from "@clawback/db";
 import { OpenClawRunEngine } from "@clawback/model-adapters";
 
-import { AgentService, DrizzleAgentStore, type AgentServiceContract } from "./agents/index.js";
+import {
+  AgentService,
+  DrizzleAgentStore,
+  type AgentServiceContract,
+} from "./agents/index.js";
 import {
   ConversationRunService,
   DrizzleOrchestrationStore,
@@ -168,7 +170,10 @@ import {
   DrizzleReviewDecisionStore,
 } from "./reviews/index.js";
 import { SmtpRelayEmailSender } from "./reviews/index.js";
-import { ActivityService, DrizzleActivityEventStore } from "./activity/index.js";
+import {
+  ActivityService,
+  DrizzleActivityEventStore,
+} from "./activity/index.js";
 import {
   ConnectionService as V1ConnectionService,
   ConnectionNotFoundError,
@@ -260,36 +265,55 @@ type ControlPlaneAppOptions = {
 };
 
 const defaultCookieSecret =
-  process.env.COOKIE_SECRET ?? "local-dev-cookie-secret-that-is-long-enough-for-signing";
+  process.env.COOKIE_SECRET ??
+  "local-dev-cookie-secret-that-is-long-enough-for-signing";
 const defaultRuntimeApiToken =
   process.env.CLAWBACK_RUNTIME_API_TOKEN ?? "clawback-local-runtime-api-token";
-const defaultInboundEmailWebhookToken =
-  resolveOptionalProviderSecret(
-    process.env.CLAWBACK_INBOUND_EMAIL_WEBHOOK_TOKEN,
-    "clawback-local-inbound-email-token",
-  );
-const defaultGmailWatchHookToken =
-  resolveOptionalProviderSecret(
-    process.env.CLAWBACK_GMAIL_WATCH_HOOK_TOKEN,
-    "clawback-local-gmail-watch-token",
-  );
+const defaultInboundEmailWebhookToken = resolveOptionalProviderSecret(
+  process.env.CLAWBACK_INBOUND_EMAIL_WEBHOOK_TOKEN,
+  "clawback-local-inbound-email-token",
+);
+const defaultGmailWatchHookToken = resolveOptionalProviderSecret(
+  process.env.CLAWBACK_GMAIL_WATCH_HOOK_TOKEN,
+  "clawback-local-gmail-watch-token",
+);
 const defaultApprovalSurfaceTokenSecret =
-  process.env.CLAWBACK_APPROVAL_SURFACE_SECRET ?? "clawback-local-approval-surface-secret";
-const defaultWhatsAppPhoneNumberId =
-  process.env.WHATSAPP_PHONE_NUMBER_ID ?? "";
-const defaultWhatsAppAccessToken =
-  process.env.WHATSAPP_ACCESS_TOKEN ?? "";
-const defaultWhatsAppVerifyToken =
-  resolveOptionalProviderSecret(
-    process.env.WHATSAPP_VERIFY_TOKEN,
-    "clawback-local-whatsapp-verify-token",
+  process.env.CLAWBACK_APPROVAL_SURFACE_SECRET ??
+  "clawback-local-approval-surface-secret";
+const defaultWhatsAppPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID ?? "";
+const defaultWhatsAppAccessToken = process.env.WHATSAPP_ACCESS_TOKEN ?? "";
+const defaultWhatsAppVerifyToken = resolveOptionalProviderSecret(
+  process.env.WHATSAPP_VERIFY_TOKEN,
+  "clawback-local-whatsapp-verify-token",
+);
+const defaultWhatsAppAppSecret = process.env.WHATSAPP_APP_SECRET ?? "";
+const defaultSlackBotToken = process.env.SLACK_BOT_TOKEN ?? "";
+const defaultSlackSigningSecret = process.env.SLACK_SIGNING_SECRET ?? "";
+const SAFE_READ_METHODS = new Set(["GET", "HEAD"]);
+
+function isLoopbackAddress(value: string | undefined | null) {
+  if (!value) {
+    return false;
+  }
+
+  return (
+    value === "::1" ||
+    value.startsWith("::1%") ||
+    value.startsWith("127.") ||
+    value.startsWith("::ffff:127.")
   );
-const defaultWhatsAppAppSecret =
-  process.env.WHATSAPP_APP_SECRET ?? "";
-const defaultSlackBotToken =
-  process.env.SLACK_BOT_TOKEN ?? "";
-const defaultSlackSigningSecret =
-  process.env.SLACK_SIGNING_SECRET ?? "";
+}
+
+function shouldBypassRateLimitInLocalDevelopment(request: FastifyRequest) {
+  const nodeEnv = process.env.NODE_ENV;
+  const isLocalDev = nodeEnv !== "production" && nodeEnv !== "test";
+
+  return (
+    isLocalDev &&
+    SAFE_READ_METHODS.has(request.method) &&
+    isLoopbackAddress(request.ip)
+  );
+}
 
 function sessionCookieOptions() {
   return {
@@ -304,7 +328,9 @@ function sessionCookieOptions() {
 
 function buildAuthenticatedResponse(
   reply: FastifyReply,
-  session: Awaited<ReturnType<AuthServiceContract["bootstrapAdmin"]>>["session"],
+  session: Awaited<
+    ReturnType<AuthServiceContract["bootstrapAdmin"]>
+  >["session"],
 ) {
   const csrfToken = reply.generateCsrf();
   return authenticatedSessionResponseSchema.parse({
@@ -336,7 +362,12 @@ function clearSessionCookie(reply: FastifyReply) {
 }
 
 function getRepoRoot() {
-  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+  return path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "..",
+    "..",
+  );
 }
 
 function ensureSession(request: FastifyRequest) {
@@ -395,10 +426,13 @@ function ensureWebhookToken(
     params?.headerName,
     ...(params?.alternateHeaderNames ?? []),
   ].filter((value): value is string => Boolean(value));
-  const headerToken = headerNames
-    .map((headerName) => request.headers[headerName.toLowerCase()])
-    .find((value): value is string => typeof value === "string" && value.length > 0)
-    ?? null;
+  const headerToken =
+    headerNames
+      .map((headerName) => request.headers[headerName.toLowerCase()])
+      .find(
+        (value): value is string =>
+          typeof value === "string" && value.length > 0,
+      ) ?? null;
   const queryToken = typeof query.token === "string" ? query.token : null;
   const providedToken = bearerToken ?? headerToken ?? queryToken;
 
@@ -413,7 +447,9 @@ function ensureWebhookToken(
 
 function mapRunEventToSseEnvelope(params: {
   conversationId: string;
-  event: Awaited<ReturnType<ConversationRunServiceContract["listRunEventsAfter"]>>[number];
+  event: Awaited<
+    ReturnType<ConversationRunServiceContract["listRunEventsAfter"]>
+  >[number];
 }) {
   const { conversationId, event } = params;
 
@@ -512,7 +548,9 @@ async function writeSseEnvelope(
   return !raw.destroyed && !raw.writableEnded;
 }
 
-export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}) {
+export async function createControlPlaneApp(
+  options: ControlPlaneAppOptions = {},
+) {
   validateProductionSecrets();
   const app = Fastify({
     logger:
@@ -541,14 +579,18 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
       runtimePublisher: runtimeBackend,
     });
 
-  const boss = options.conversationRunService ? null : await createPgBossQueue();
+  const boss = options.conversationRunService
+    ? null
+    : await createPgBossQueue();
   const sharedQueue = boss ? new PgBossRunQueue(boss) : null;
   const queue = sharedQueue ?? {
     async enqueueRun() {
       throw new Error("Run queue is not available in this app instance.");
     },
     async enqueueConnectorSync() {
-      throw new Error("Connector sync queue is not available in this app instance.");
+      throw new Error(
+        "Connector sync queue is not available in this app instance.",
+      );
     },
   };
   const connectorService =
@@ -590,7 +632,8 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
       store: new DrizzleOrchestrationStore(db),
       queue,
     });
-  const operatorActionsService = options.operatorActionsService ?? new LocalOperatorActionsService();
+  const operatorActionsService =
+    options.operatorActionsService ?? new LocalOperatorActionsService();
 
   const workerStore = new DrizzleWorkerStore(db as any);
   const reviewedEmailSender = (() => {
@@ -608,13 +651,15 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
       missing.push("CLAWBACK_SMTP_FROM_ADDRESS");
     }
     if (smtpUsername && !smtpPassword) {
-      missing.push("CLAWBACK_SMTP_PASSWORD (required when CLAWBACK_SMTP_USERNAME is set)");
+      missing.push(
+        "CLAWBACK_SMTP_PASSWORD (required when CLAWBACK_SMTP_USERNAME is set)",
+      );
     }
 
     if (missing.length > 0) {
       app.log.warn(
         `SMTP relay partially configured — missing: ${missing.join(", ")}. ` +
-        "Reviewed email sends will be unavailable until configuration is complete.",
+          "Reviewed email sends will be unavailable until configuration is complete.",
       );
       return undefined;
     }
@@ -626,19 +671,26 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
   })();
   const reviewedExternalWorkflowExecutor = new N8nWorkflowExecutor();
   const inputRouteStoreInstance = new DrizzleInputRouteStore(db as any);
-  const actionCapabilityStoreInstance = new DrizzleActionCapabilityStore(db as any);
+  const actionCapabilityStoreInstance = new DrizzleActionCapabilityStore(
+    db as any,
+  );
   const workerServiceInstance = new WorkerService({ store: workerStore });
-  const connectionServiceInstance = new V1ConnectionService({ store: new DrizzleV1ConnectionStore(db as any) });
-  const reviewServiceInstance = new ReviewService({ store: new DrizzleReviewStore(db as any) });
+  const connectionServiceInstance = new V1ConnectionService({
+    store: new DrizzleV1ConnectionStore(db as any),
+  });
+  const reviewServiceInstance = new ReviewService({
+    store: new DrizzleReviewStore(db as any),
+  });
   const reviewDecisionServiceInstance = new ReviewDecisionService({
     store: new DrizzleReviewDecisionStore(db as any),
   });
   const workspacePeopleServiceInstance = new WorkspacePeopleService({
     store: new DrizzleWorkspacePeopleStore(db as any),
   });
-  const approvalSurfaceIdentityServiceInstance = new ApprovalSurfaceIdentityService({
-    store: new DrizzleApprovalSurfaceIdentityStore(db as any),
-  });
+  const approvalSurfaceIdentityServiceInstance =
+    new ApprovalSurfaceIdentityService({
+      store: new DrizzleApprovalSurfaceIdentityStore(db as any),
+    });
   const approvalSurfaceTokenSigner = new ApprovalSurfaceTokenSigner(
     options.approvalSurfaceTokenSecret ?? defaultApprovalSurfaceTokenSecret,
   );
@@ -651,13 +703,21 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
   const workspaceReadModelServices: WorkspaceReadModelServices =
     options.workspaceReadModelServices ?? {
       workerService: workerServiceInstance,
-      workItemService: new WorkItemService({ store: new DrizzleWorkItemStore(db as any) }),
-      inboxItemService: new InboxItemService({ store: new DrizzleInboxItemStore(db as any) }),
+      workItemService: new WorkItemService({
+        store: new DrizzleWorkItemStore(db as any),
+      }),
+      inboxItemService: new InboxItemService({
+        store: new DrizzleInboxItemStore(db as any),
+      }),
       reviewService: reviewServiceInstance,
       reviewDecisionService: reviewDecisionServiceInstance,
-      activityService: new ActivityService({ store: new DrizzleActivityEventStore(db as any) }),
+      activityService: new ActivityService({
+        store: new DrizzleActivityEventStore(db as any),
+      }),
       connectionService: connectionServiceInstance,
-      inputRouteService: new InputRouteService({ store: inputRouteStoreInstance }),
+      inputRouteService: new InputRouteService({
+        store: inputRouteStoreInstance,
+      }),
       actionCapabilityService: new ActionCapabilityService({
         store: actionCapabilityStoreInstance,
       }),
@@ -693,8 +753,12 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
       reviewedExternalWorkflowExecutor,
       workerPackInstallService: workerPackInstallServiceInstance,
       workerPacks: [...firstPartyWorkerPacks],
-      contactService: new ContactService({ store: new DrizzleContactStore(db as any) }),
-      accountService: new AccountService({ store: new DrizzleAccountStore(db as any) }),
+      contactService: new ContactService({
+        store: new DrizzleContactStore(db as any),
+      }),
+      accountService: new AccountService({
+        store: new DrizzleAccountStore(db as any),
+      }),
     };
   const reviewResolutionService = new ReviewResolutionService({
     reviewService: workspaceReadModelServices.reviewService,
@@ -703,7 +767,10 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
     activityService: workspaceReadModelServices.activityService,
     workerService: workspaceReadModelServices.workerService,
     ...(workspaceReadModelServices.actionCapabilityService
-      ? { actionCapabilityService: workspaceReadModelServices.actionCapabilityService }
+      ? {
+          actionCapabilityService:
+            workspaceReadModelServices.actionCapabilityService,
+        }
       : {}),
     ...(workspaceReadModelServices.connectionService
       ? { connectionService: workspaceReadModelServices.connectionService }
@@ -712,22 +779,33 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
       ? { reviewedEmailSender: workspaceReadModelServices.reviewedEmailSender }
       : {}),
     ...(workspaceReadModelServices.reviewedExternalWorkflowExecutor
-      ? { reviewedExternalWorkflowExecutor: workspaceReadModelServices.reviewedExternalWorkflowExecutor }
+      ? {
+          reviewedExternalWorkflowExecutor:
+            workspaceReadModelServices.reviewedExternalWorkflowExecutor,
+        }
       : {}),
     ...(workspaceReadModelServices.reviewDecisionService
-      ? { reviewDecisionService: workspaceReadModelServices.reviewDecisionService }
+      ? {
+          reviewDecisionService:
+            workspaceReadModelServices.reviewDecisionService,
+        }
       : {}),
   });
   const reviewApprovalSurfaceService = new ReviewApprovalSurfaceService({
     reviewService: workspaceReadModelServices.reviewService,
     reviewResolutionService,
     ...(workspaceReadModelServices.reviewDecisionService
-      ? { reviewDecisionService: workspaceReadModelServices.reviewDecisionService }
+      ? {
+          reviewDecisionService:
+            workspaceReadModelServices.reviewDecisionService,
+        }
       : {}),
     approvalSurfaceIdentityService:
-      workspaceReadModelServices.approvalSurfaceIdentityService ?? approvalSurfaceIdentityServiceInstance,
+      workspaceReadModelServices.approvalSurfaceIdentityService ??
+      approvalSurfaceIdentityServiceInstance,
     workspacePeopleService:
-      workspaceReadModelServices.workspacePeopleService ?? workspacePeopleServiceInstance,
+      workspaceReadModelServices.workspacePeopleService ??
+      workspacePeopleServiceInstance,
     tokenSigner: approvalSurfaceTokenSigner,
   });
   const runtimeConnectionService =
@@ -759,25 +837,35 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
     watchedInboxRouteLookup: {
       async findWatchedInboxRoute(workspaceId: string, workerId: string) {
         const routes = await inputRouteStore.listByWorkspace(workspaceId);
-        return routes.find(
-          (r) => r.workerId === workerId && r.kind === "watched_inbox",
-        ) ?? null;
+        return (
+          routes.find(
+            (r) => r.workerId === workerId && r.kind === "watched_inbox",
+          ) ?? null
+        );
       },
     },
     connectionLookup: {
       async findGmailReadOnly(workspaceId: string) {
-        const connections = await v1ConnectionStore.listByWorkspace(workspaceId);
-        return connections.find(
-          (c) => c.provider === "gmail" && c.accessMode === "read_only",
-        ) ?? null;
+        const connections =
+          await v1ConnectionStore.listByWorkspace(workspaceId);
+        return (
+          connections.find(
+            (c) => c.provider === "gmail" && c.accessMode === "read_only",
+          ) ?? null
+        );
       },
     },
     workerLookup: workerLookupAdapter,
     routeTargetLookup: {
-      async listActiveByKind(workspaceId: string, kind: import("@clawback/contracts").WorkerKind) {
+      async listActiveByKind(
+        workspaceId: string,
+        kind: import("@clawback/contracts").WorkerKind,
+      ) {
         const workers = await workerStore.list(workspaceId);
         return workers
-          .filter((worker) => worker.kind === kind && worker.status === "active")
+          .filter(
+            (worker) => worker.kind === kind && worker.status === "active",
+          )
           .map((worker) => ({
             id: worker.id,
             workspaceId: worker.workspaceId,
@@ -800,16 +888,20 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
     inputRouteStore,
     gmailWatchHookService,
     enabled:
-      process.env.NODE_ENV !== "test"
-      && process.env.CLAWBACK_GMAIL_POLLING_ENABLED !== "false",
-    pollIntervalMs: Number(process.env.CLAWBACK_GMAIL_POLL_INTERVAL_MS ?? "60000"),
+      process.env.NODE_ENV !== "test" &&
+      process.env.CLAWBACK_GMAIL_POLLING_ENABLED !== "false",
+    pollIntervalMs: Number(
+      process.env.CLAWBACK_GMAIL_POLL_INTERVAL_MS ?? "60000",
+    ),
   });
   const inboundEmailWebhookToken =
     options.inboundEmailWebhookToken ?? defaultInboundEmailWebhookToken;
   const gmailWatchHookToken =
     options.gmailWatchHookToken ?? defaultGmailWatchHookToken;
   const consoleOrigin =
-    options.consoleOrigin ?? process.env.CONSOLE_ORIGIN ?? "http://localhost:3000";
+    options.consoleOrigin ??
+    process.env.CONSOLE_ORIGIN ??
+    "http://localhost:3000";
 
   app.addHook("onClose", async () => {
     await gmailPollingService.stop();
@@ -829,8 +921,10 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
   });
 
   await app.register(fastifyRateLimit, {
-    max: 100,
+    max: 300,
     timeWindow: "1 minute",
+    // Prevent the local console from self-throttling the control plane on read-heavy pages.
+    allowList: shouldBypassRateLimitInLocalDevelopment,
   });
 
   await app.register(fastifyCookie, {
@@ -873,13 +967,16 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
       });
     }
 
-    // V1 domain service errors with statusCode
     const err = error as Record<string, unknown>;
-    if (typeof err.statusCode === "number" && typeof err.code === "string") {
-      return reply.status(err.statusCode as number).send({
+    if (typeof err.statusCode === "number") {
+      const body: { error: unknown; code?: string } = {
         error: err.message ?? "Unknown error",
-        code: err.code,
-      });
+      };
+      if (typeof err.code === "string") {
+        body.code = err.code;
+      }
+
+      return reply.status(err.statusCode as number).send(body);
     }
 
     request.log.error(error);
@@ -890,7 +987,9 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
 
   app.addHook("onRequest", async (request) => {
     const sessionToken = parseSignedSessionCookie(request);
-    request.authContext = sessionToken ? await authService.getSessionFromToken(sessionToken) : null;
+    request.authContext = sessionToken
+      ? await authService.getSessionFromToken(sessionToken)
+      : null;
   });
 
   app.get("/healthz", async () => ({
@@ -941,30 +1040,40 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
     return reply.send(setupStatusResponseSchema.parse(payload));
   });
 
-  app.post("/api/setup/bootstrap-admin", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (request, reply) => {
-    const parsed = bootstrapAdminRequestSchema.parse(request.body);
-    const result = await authService.bootstrapAdmin({
-      workspaceName: parsed.workspace_name,
-      workspaceSlug: parsed.workspace_slug,
-      email: parsed.email,
-      displayName: parsed.display_name,
-      password: parsed.password,
-    });
+  app.post(
+    "/api/setup/bootstrap-admin",
+    { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const parsed = bootstrapAdminRequestSchema.parse(request.body);
+      const result = await authService.bootstrapAdmin({
+        workspaceName: parsed.workspace_name,
+        workspaceSlug: parsed.workspace_slug,
+        email: parsed.email,
+        displayName: parsed.display_name,
+        password: parsed.password,
+      });
 
-    setSessionCookie(reply, result.sessionToken);
-    return reply.status(201).send(buildAuthenticatedResponse(reply, result.session));
-  });
+      setSessionCookie(reply, result.sessionToken);
+      return reply
+        .status(201)
+        .send(buildAuthenticatedResponse(reply, result.session));
+    },
+  );
 
-  app.post("/api/auth/login", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (request, reply) => {
-    const parsed = loginRequestSchema.parse(request.body);
-    const result = await authService.login({
-      email: parsed.email,
-      password: parsed.password,
-    });
+  app.post(
+    "/api/auth/login",
+    { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const parsed = loginRequestSchema.parse(request.body);
+      const result = await authService.login({
+        email: parsed.email,
+        password: parsed.password,
+      });
 
-    setSessionCookie(reply, result.sessionToken);
-    return reply.send(buildAuthenticatedResponse(reply, result.session));
-  });
+      setSessionCookie(reply, result.sessionToken);
+      return reply.send(buildAuthenticatedResponse(reply, result.session));
+    },
+  );
 
   app.get("/api/auth/session", async (request, reply) => {
     const session = ensureSession(request);
@@ -987,39 +1096,47 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
     );
   });
 
-  app.post("/api/auth/logout", { onRequest: [app.csrfProtection] }, async (request, reply) => {
-    const sessionToken = parseSignedSessionCookie(request);
-    if (sessionToken) {
-      await authService.logout(sessionToken);
-    }
-    clearSessionCookie(reply);
-    return reply.status(204).send();
-  });
+  app.post(
+    "/api/auth/logout",
+    { onRequest: [app.csrfProtection] },
+    async (request, reply) => {
+      const sessionToken = parseSignedSessionCookie(request);
+      if (sessionToken) {
+        await authService.logout(sessionToken);
+      }
+      clearSessionCookie(reply);
+      return reply.status(204).send();
+    },
+  );
 
-  app.post("/api/invitations", { onRequest: [app.csrfProtection] }, async (request, reply) => {
-    const actor = ensureAdmin(request);
-    const parsed = createInvitationRequestSchema.parse(request.body);
-    const invitationInput = parsed.expires_at
-      ? {
-          email: parsed.email,
-          role: parsed.role,
-          expiresAt: new Date(parsed.expires_at),
-        }
-      : {
-          email: parsed.email,
-          role: parsed.role,
-        };
-    const result = await authService.createInvitation(actor, {
-      ...invitationInput,
-    });
+  app.post(
+    "/api/invitations",
+    { onRequest: [app.csrfProtection] },
+    async (request, reply) => {
+      const actor = ensureAdmin(request);
+      const parsed = createInvitationRequestSchema.parse(request.body);
+      const invitationInput = parsed.expires_at
+        ? {
+            email: parsed.email,
+            role: parsed.role,
+            expiresAt: new Date(parsed.expires_at),
+          }
+        : {
+            email: parsed.email,
+            role: parsed.role,
+          };
+      const result = await authService.createInvitation(actor, {
+        ...invitationInput,
+      });
 
-    return reply.status(201).send(
-      createInvitationResponseSchema.parse({
-        invitation: result.invitation,
-        token: result.token,
-      }),
-    );
-  });
+      return reply.status(201).send(
+        createInvitationResponseSchema.parse({
+          invitation: result.invitation,
+          token: result.token,
+        }),
+      );
+    },
+  );
 
   app.post("/api/invitations/claim", async (request, reply) => {
     const parsed = claimInvitationRequestSchema.parse(request.body);
@@ -1030,13 +1147,21 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
     });
 
     setSessionCookie(reply, result.sessionToken);
-    return reply.status(201).send(buildAuthenticatedResponse(reply, result.session));
+    return reply
+      .status(201)
+      .send(buildAuthenticatedResponse(reply, result.session));
   });
 
   app.get("/api/admin/runtime-control", async (request, reply) => {
     ensureAdmin(request);
     const result = await operatorActionsService.getRuntimeControlStatus();
     return reply.send(runtimeControlStatusResponseSchema.parse(result));
+  });
+
+  app.get("/api/admin/runtime-readiness", async (request, reply) => {
+    ensureAdmin(request);
+    const result = await operatorActionsService.getRuntimeReadinessStatus();
+    return reply.send(runtimeReadinessResponseSchema.parse(result));
   });
 
   app.get("/api/admin/runtime-control/worker", async (request, reply) => {
@@ -1098,7 +1223,11 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
       const actor = ensureSession(request);
       const params = approvalPathParamsSchema.parse(request.params);
       const parsed = resolveApprovalRequestSchema.parse(request.body);
-      const result = await approvalService.resolveApproval(actor, params.approvalId, parsed);
+      const result = await approvalService.resolveApproval(
+        actor,
+        params.approvalId,
+        parsed,
+      );
       return reply.send(getApprovalResponseSchema.parse(result));
     },
   );
@@ -1158,13 +1287,23 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
     ensureRuntimeApi(request);
 
     const body = request.body as Record<string, unknown>;
-    const runtimeSessionKey = typeof body.runtime_session_key === "string" ? body.runtime_session_key : "";
-    const toolInvocationId = typeof body.tool_invocation_id === "string" ? body.tool_invocation_id : "";
-    const draft = body.draft && typeof body.draft === "object" ? (body.draft as Record<string, unknown>) : {};
+    const runtimeSessionKey =
+      typeof body.runtime_session_key === "string"
+        ? body.runtime_session_key
+        : "";
+    const toolInvocationId =
+      typeof body.tool_invocation_id === "string"
+        ? body.tool_invocation_id
+        : "";
+    const draft =
+      body.draft && typeof body.draft === "object"
+        ? (body.draft as Record<string, unknown>)
+        : {};
 
     if (!runtimeSessionKey || !toolInvocationId) {
       return reply.status(400).send({
-        error: "Missing required fields: runtime_session_key, tool_invocation_id.",
+        error:
+          "Missing required fields: runtime_session_key, tool_invocation_id.",
       });
     }
 
@@ -1173,8 +1312,10 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
       if (typeof draft.to === "string") draftInput.to = draft.to;
       if (typeof draft.subject === "string") draftInput.subject = draft.subject;
       if (typeof draft.body === "string") draftInput.body = draft.body;
-      if (typeof draft.context_summary === "string") draftInput.context_summary = draft.context_summary;
-      if (typeof draft.source_event_id === "string") draftInput.source_event_id = draft.source_event_id;
+      if (typeof draft.context_summary === "string")
+        draftInput.context_summary = draft.context_summary;
+      if (typeof draft.source_event_id === "string")
+        draftInput.source_event_id = draft.source_event_id;
 
       const result = await runtimeToolService.draftFollowUp({
         runtime_session_key: runtimeSessionKey,
@@ -1183,111 +1324,165 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
       });
       return reply.status(201).send(result);
     } catch (error) {
-      if (error instanceof Error && error.message.includes("No active Clawback run")) {
+      if (
+        error instanceof Error &&
+        error.message.includes("No active Clawback run")
+      ) {
         return reply.status(404).send({ error: error.message });
       }
       throw error;
     }
   });
 
-  app.post("/api/runtime/follow-up-tools/draft-recap", async (request, reply) => {
-    ensureRuntimeApi(request);
+  app.post(
+    "/api/runtime/follow-up-tools/draft-recap",
+    async (request, reply) => {
+      ensureRuntimeApi(request);
 
-    const body = request.body as Record<string, unknown>;
-    const runtimeSessionKey = typeof body.runtime_session_key === "string" ? body.runtime_session_key : "";
-    const toolInvocationId = typeof body.tool_invocation_id === "string" ? body.tool_invocation_id : "";
-    const recap = body.recap && typeof body.recap === "object" ? (body.recap as Record<string, unknown>) : {};
+      const body = request.body as Record<string, unknown>;
+      const runtimeSessionKey =
+        typeof body.runtime_session_key === "string"
+          ? body.runtime_session_key
+          : "";
+      const toolInvocationId =
+        typeof body.tool_invocation_id === "string"
+          ? body.tool_invocation_id
+          : "";
+      const recap =
+        body.recap && typeof body.recap === "object"
+          ? (body.recap as Record<string, unknown>)
+          : {};
 
-    if (!runtimeSessionKey || !toolInvocationId) {
-      return reply.status(400).send({
-        error: "Missing required fields: runtime_session_key, tool_invocation_id.",
-      });
-    }
-
-    try {
-      const recapInput: Record<string, unknown> = {};
-      if (typeof recap.to === "string") recapInput.to = recap.to;
-      if (typeof recap.subject === "string") recapInput.subject = recap.subject;
-      if (typeof recap.meeting_summary === "string") recapInput.meeting_summary = recap.meeting_summary;
-      if (Array.isArray(recap.action_items)) recapInput.action_items = recap.action_items;
-      if (Array.isArray(recap.decisions)) recapInput.decisions = recap.decisions;
-
-      const result = await runtimeToolService.draftRecap({
-        runtime_session_key: runtimeSessionKey,
-        tool_invocation_id: toolInvocationId,
-        recap: recapInput as { to?: string; subject?: string; meeting_summary?: string; action_items?: string[]; decisions?: string[] },
-      });
-      return reply.status(201).send(result);
-    } catch (error) {
-      if (error instanceof Error && error.message.includes("No active Clawback run")) {
-        return reply.status(404).send({ error: error.message });
+      if (!runtimeSessionKey || !toolInvocationId) {
+        return reply.status(400).send({
+          error:
+            "Missing required fields: runtime_session_key, tool_invocation_id.",
+        });
       }
-      throw error;
-    }
-  });
 
-  app.post("/api/runtime/follow-up-tools/request-send", async (request, reply) => {
-    ensureRuntimeApi(request);
+      try {
+        const recapInput: Record<string, unknown> = {};
+        if (typeof recap.to === "string") recapInput.to = recap.to;
+        if (typeof recap.subject === "string")
+          recapInput.subject = recap.subject;
+        if (typeof recap.meeting_summary === "string")
+          recapInput.meeting_summary = recap.meeting_summary;
+        if (Array.isArray(recap.action_items))
+          recapInput.action_items = recap.action_items;
+        if (Array.isArray(recap.decisions))
+          recapInput.decisions = recap.decisions;
 
-    const body = request.body as Record<string, unknown>;
-    const runtimeSessionKey = typeof body.runtime_session_key === "string" ? body.runtime_session_key : "";
-    const toolInvocationId = typeof body.tool_invocation_id === "string" ? body.tool_invocation_id : "";
-    const sendRequest = body.send_request && typeof body.send_request === "object"
-      ? (body.send_request as Record<string, unknown>)
-      : {};
-
-    if (!runtimeSessionKey || !toolInvocationId) {
-      return reply.status(400).send({
-        error: "Missing required fields: runtime_session_key, tool_invocation_id.",
-      });
-    }
-
-    try {
-      const result = await runtimeToolService.requestSend({
-        runtime_session_key: runtimeSessionKey,
-        tool_invocation_id: toolInvocationId,
-        send_request: {
-          work_item_id: typeof sendRequest.work_item_id === "string" ? sendRequest.work_item_id : "",
-          to: typeof sendRequest.to === "string" ? sendRequest.to : "",
-          subject: typeof sendRequest.subject === "string" ? sendRequest.subject : "",
-          body: typeof sendRequest.body === "string" ? sendRequest.body : "",
-        },
-      });
-      return reply.status(201).send(result);
-    } catch (error) {
-      if (error instanceof Error && error.message.includes("No active Clawback run")) {
-        return reply.status(404).send({ error: error.message });
+        const result = await runtimeToolService.draftRecap({
+          runtime_session_key: runtimeSessionKey,
+          tool_invocation_id: toolInvocationId,
+          recap: recapInput as {
+            to?: string;
+            subject?: string;
+            meeting_summary?: string;
+            action_items?: string[];
+            decisions?: string[];
+          },
+        });
+        return reply.status(201).send(result);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.includes("No active Clawback run")
+        ) {
+          return reply.status(404).send({ error: error.message });
+        }
+        throw error;
       }
-      throw error;
-    }
-  });
+    },
+  );
 
-  app.post("/api/runtime/reviews/:id/approval-surfaces/whatsapp/resolve", async (request, reply) => {
-    ensureRuntimeApi(request);
+  app.post(
+    "/api/runtime/follow-up-tools/request-send",
+    async (request, reply) => {
+      ensureRuntimeApi(request);
 
-    const { id } = request.params as { id: string };
-    const parsed = reviewSurfaceResolveRequestSchema.parse(request.body);
+      const body = request.body as Record<string, unknown>;
+      const runtimeSessionKey =
+        typeof body.runtime_session_key === "string"
+          ? body.runtime_session_key
+          : "";
+      const toolInvocationId =
+        typeof body.tool_invocation_id === "string"
+          ? body.tool_invocation_id
+          : "";
+      const sendRequest =
+        body.send_request && typeof body.send_request === "object"
+          ? (body.send_request as Record<string, unknown>)
+          : {};
 
-    const result = await reviewApprovalSurfaceService.resolveWhatsAppAction({
-      approvalToken: parsed.approval_token,
-      actorIdentity: parsed.actor_identity,
-      rationale: parsed.rationale ?? null,
-      interactionId: parsed.interaction_id ?? null,
-    });
+      if (!runtimeSessionKey || !toolInvocationId) {
+        return reply.status(400).send({
+          error:
+            "Missing required fields: runtime_session_key, tool_invocation_id.",
+        });
+      }
 
-    if (result.review.id !== id) {
-      return reply.status(400).send({
-        error: "Approval token review does not match the route parameter.",
-        code: "review_id_mismatch",
+      try {
+        const result = await runtimeToolService.requestSend({
+          runtime_session_key: runtimeSessionKey,
+          tool_invocation_id: toolInvocationId,
+          send_request: {
+            work_item_id:
+              typeof sendRequest.work_item_id === "string"
+                ? sendRequest.work_item_id
+                : "",
+            to: typeof sendRequest.to === "string" ? sendRequest.to : "",
+            subject:
+              typeof sendRequest.subject === "string"
+                ? sendRequest.subject
+                : "",
+            body: typeof sendRequest.body === "string" ? sendRequest.body : "",
+          },
+        });
+        return reply.status(201).send(result);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.includes("No active Clawback run")
+        ) {
+          return reply.status(404).send({ error: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
+  app.post(
+    "/api/runtime/reviews/:id/approval-surfaces/whatsapp/resolve",
+    async (request, reply) => {
+      ensureRuntimeApi(request);
+
+      const { id } = request.params as { id: string };
+      const parsed = reviewSurfaceResolveRequestSchema.parse(request.body);
+
+      const result = await reviewApprovalSurfaceService.resolveWhatsAppAction({
+        approvalToken: parsed.approval_token,
+        actorIdentity: parsed.actor_identity,
+        rationale: parsed.rationale ?? null,
+        interactionId: parsed.interaction_id ?? null,
       });
-    }
 
-    return reply.send(reviewSurfaceResolveResponseSchema.parse({
-      review: result.review,
-      decision: result.decision,
-      already_resolved: result.alreadyResolved,
-    }));
-  });
+      if (result.review.id !== id) {
+        return reply.status(400).send({
+          error: "Approval token review does not match the route parameter.",
+          code: "review_id_mismatch",
+        });
+      }
+
+      return reply.send(
+        reviewSurfaceResolveResponseSchema.parse({
+          review: result.review,
+          decision: result.decision,
+          already_resolved: result.alreadyResolved,
+        }),
+      );
+    },
+  );
 
   // ---------------------------------------------------------------------------
   // WhatsApp webhook (W2)
@@ -1335,7 +1530,9 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
     }
 
     const connections = await runtimeConnectionService.listAllStored();
-    return Boolean(findWhatsAppConnectionByVerifyToken(connections, verifyToken));
+    return Boolean(
+      findWhatsAppConnectionByVerifyToken(connections, verifyToken),
+    );
   }
 
   // GET /api/webhooks/whatsapp — Meta webhook verification
@@ -1346,9 +1543,9 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
     const challenge = query["hub.challenge"];
 
     if (
-      mode === "subscribe"
-      && verifyToken
-      && await hasConfiguredWhatsAppVerifyToken(verifyToken)
+      mode === "subscribe" &&
+      verifyToken &&
+      (await hasConfiguredWhatsAppVerifyToken(verifyToken))
     ) {
       return reply.status(200).send(challenge ?? "");
     }
@@ -1357,122 +1554,142 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
   });
 
   // POST /api/webhooks/whatsapp — Meta webhook callback
-  app.post("/api/webhooks/whatsapp", {
-    preParsing: (request, _reply, payload, done) => {
-      const passThrough = new PassThrough();
-      const chunks: Buffer[] = [];
+  app.post(
+    "/api/webhooks/whatsapp",
+    {
+      preParsing: (request, _reply, payload, done) => {
+        const passThrough = new PassThrough();
+        const chunks: Buffer[] = [];
 
-      payload.on("data", (chunk) => {
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        chunks.push(buffer);
-        passThrough.write(buffer);
-      });
-      payload.on("end", () => {
-        request.whatsappRawBody = Buffer.concat(chunks);
-        passThrough.end();
-      });
-      payload.on("error", (error) => {
-        passThrough.destroy(error);
-      });
+        payload.on("data", (chunk) => {
+          const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+          chunks.push(buffer);
+          passThrough.write(buffer);
+        });
+        payload.on("end", () => {
+          request.whatsappRawBody = Buffer.concat(chunks);
+          passThrough.end();
+        });
+        payload.on("error", (error) => {
+          passThrough.destroy(error);
+        });
 
-      done(null, passThrough);
+        done(null, passThrough);
+      },
     },
-  }, async (request, reply) => {
-    if (!defaultWhatsAppAppSecret) {
-      return reply.status(503).send({
-        error:
-          "WhatsApp webhook signing is not configured. Set WHATSAPP_APP_SECRET before enabling the public callback.",
-        code: "whatsapp_webhook_signature_not_configured",
-      });
-    }
-
-    const signature = request.headers["x-hub-signature-256"] as string | undefined;
-    const rawBody = request.whatsappRawBody;
-    if (!rawBody) {
-      return reply.status(500).send({
-        error: "Raw webhook body was not captured for signature verification.",
-        code: "webhook_raw_body_missing",
-      });
-    }
-    if (!whatsappWebhookHandler.verifySignature(rawBody, signature)) {
-      return reply.status(401).send({
-        error: "Invalid webhook signature.",
-        code: "webhook_signature_invalid",
-      });
-    }
-
-    const payload = request.body as import("./integrations/whatsapp/types.js").WhatsAppWebhookPayload;
-    const phoneNumberId = payload.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
-    if (phoneNumberId) {
-      const allConnections = await runtimeConnectionService.listAllStored();
-      const resolvedConnection = findWhatsAppConnectionByPhoneNumberId(
-        allConnections,
-        phoneNumberId,
-      );
-      if (!resolvedConnection && phoneNumberId !== defaultWhatsAppPhoneNumberId) {
-        return reply.send({
-          processed: 0,
-          skipped: 1,
-          errors: 1,
+    async (request, reply) => {
+      if (!defaultWhatsAppAppSecret) {
+        return reply.status(503).send({
+          error:
+            "WhatsApp webhook signing is not configured. Set WHATSAPP_APP_SECRET before enabling the public callback.",
+          code: "whatsapp_webhook_signature_not_configured",
         });
       }
-    }
 
-    const result = await whatsappWebhookHandler.processWebhook(payload);
+      const signature = request.headers["x-hub-signature-256"] as
+        | string
+        | undefined;
+      const rawBody = request.whatsappRawBody;
+      if (!rawBody) {
+        return reply.status(500).send({
+          error:
+            "Raw webhook body was not captured for signature verification.",
+          code: "webhook_raw_body_missing",
+        });
+      }
+      if (!whatsappWebhookHandler.verifySignature(rawBody, signature)) {
+        return reply.status(401).send({
+          error: "Invalid webhook signature.",
+          code: "webhook_signature_invalid",
+        });
+      }
 
-    // Always return 200 to Meta to acknowledge receipt
-    return reply.send({
-      processed: result.processed,
-      skipped: result.skipped,
-      errors: result.errors.length,
-    });
-  });
+      const payload =
+        request.body as import("./integrations/whatsapp/types.js").WhatsAppWebhookPayload;
+      const phoneNumberId =
+        payload.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
+      if (phoneNumberId) {
+        const allConnections = await runtimeConnectionService.listAllStored();
+        const resolvedConnection = findWhatsAppConnectionByPhoneNumberId(
+          allConnections,
+          phoneNumberId,
+        );
+        if (
+          !resolvedConnection &&
+          phoneNumberId !== defaultWhatsAppPhoneNumberId
+        ) {
+          return reply.send({
+            processed: 0,
+            skipped: 1,
+            errors: 1,
+          });
+        }
+      }
+
+      const result = await whatsappWebhookHandler.processWebhook(payload);
+
+      // Always return 200 to Meta to acknowledge receipt
+      return reply.send({
+        processed: result.processed,
+        skipped: result.skipped,
+        errors: result.errors.length,
+      });
+    },
+  );
 
   // POST /api/runtime/reviews/:id/approval-surfaces/whatsapp/notify
   // Triggers outbound WhatsApp approval prompt delivery
-  app.post("/api/runtime/reviews/:id/approval-surfaces/whatsapp/notify", async (request, reply) => {
-    ensureRuntimeApi(request);
+  app.post(
+    "/api/runtime/reviews/:id/approval-surfaces/whatsapp/notify",
+    async (request, reply) => {
+      ensureRuntimeApi(request);
 
-    const { id } = request.params as { id: string };
-    const workspaceId = (request.body as { workspace_id?: string })?.workspace_id ?? "";
-    if (!workspaceId) {
-      return reply.status(400).send({
-        error: "workspace_id is required.",
-        code: "missing_workspace_id",
-      });
-    }
+      const { id } = request.params as { id: string };
+      const workspaceId =
+        (request.body as { workspace_id?: string })?.workspace_id ?? "";
+      if (!workspaceId) {
+        return reply.status(400).send({
+          error: "workspace_id is required.",
+          code: "missing_workspace_id",
+        });
+      }
 
-    const whatsappTransportService = await resolveWorkspaceWhatsAppTransport(workspaceId);
-    if (!whatsappTransportService) {
-      return reply.status(501).send({
-        error: "WhatsApp transport is not configured for this workspace.",
-        code: "whatsapp_not_configured",
-      });
-    }
+      const whatsappTransportService =
+        await resolveWorkspaceWhatsAppTransport(workspaceId);
+      if (!whatsappTransportService) {
+        return reply.status(501).send({
+          error: "WhatsApp transport is not configured for this workspace.",
+          code: "whatsapp_not_configured",
+        });
+      }
 
-    const { review, recipients } =
-      await reviewApprovalSurfaceService.buildWhatsAppApprovalActions(
-        workspaceId,
-        { reviewId: id },
+      const { review, recipients } =
+        await reviewApprovalSurfaceService.buildWhatsAppApprovalActions(
+          workspaceId,
+          { reviewId: id },
+        );
+
+      if (recipients.length === 0) {
+        return reply.send({
+          review_id: review.id,
+          sent: 0,
+          failed: 0,
+          errors: [],
+          message: "No eligible WhatsApp recipients found for this review.",
+        });
+      }
+
+      const result = await whatsappTransportService.sendApprovalPrompt(
+        review,
+        recipients,
       );
 
-    if (recipients.length === 0) {
       return reply.send({
         review_id: review.id,
-        sent: 0,
-        failed: 0,
-        errors: [],
-        message: "No eligible WhatsApp recipients found for this review.",
+        ...result,
       });
-    }
-
-    const result = await whatsappTransportService.sendApprovalPrompt(review, recipients);
-
-    return reply.send({
-      review_id: review.id,
-      ...result,
-    });
-  });
+    },
+  );
 
   // ---------------------------------------------------------------------------
   // Slack webhook
@@ -1502,222 +1719,251 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
   }
 
   // POST /api/webhooks/slack/interactions — Slack interactive button callbacks
-  app.post("/api/webhooks/slack/interactions", {
-    preParsing: (request, _reply, payload, done) => {
-      const passThrough = new PassThrough();
-      const chunks: Buffer[] = [];
+  app.post(
+    "/api/webhooks/slack/interactions",
+    {
+      preParsing: (request, _reply, payload, done) => {
+        const passThrough = new PassThrough();
+        const chunks: Buffer[] = [];
 
-      payload.on("data", (chunk) => {
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        chunks.push(buffer);
-        passThrough.write(buffer);
-      });
-      payload.on("end", () => {
-        request.slackRawBody = Buffer.concat(chunks);
-        passThrough.end();
-      });
-      payload.on("error", (error) => {
-        passThrough.destroy(error);
-      });
+        payload.on("data", (chunk) => {
+          const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+          chunks.push(buffer);
+          passThrough.write(buffer);
+        });
+        payload.on("end", () => {
+          request.slackRawBody = Buffer.concat(chunks);
+          passThrough.end();
+        });
+        payload.on("error", (error) => {
+          passThrough.destroy(error);
+        });
 
-      done(null, passThrough);
+        done(null, passThrough);
+      },
     },
-  }, async (request, reply) => {
-    const allConnections = await runtimeConnectionService.listAllStored();
-    const slackConnections = allConnections.filter(
-      (c) => c.provider === "slack" && c.status === "connected",
-    );
+    async (request, reply) => {
+      const allConnections = await runtimeConnectionService.listAllStored();
+      const slackConnections = allConnections.filter(
+        (c) => c.provider === "slack" && c.status === "connected",
+      );
 
-    if (slackConnections.length === 0) {
-      return reply.status(404).send({
-        error: "No connected Slack integration found.",
-        code: "slack_not_configured",
+      if (slackConnections.length === 0) {
+        return reply.status(404).send({
+          error: "No connected Slack integration found.",
+          code: "slack_not_configured",
+        });
+      }
+
+      const rawBody = request.slackRawBody;
+      if (!rawBody) {
+        return reply.status(500).send({
+          error:
+            "Raw webhook body was not captured for signature verification.",
+          code: "webhook_raw_body_missing",
+        });
+      }
+
+      const timestamp = request.headers["x-slack-request-timestamp"] as
+        | string
+        | undefined;
+      const signature = request.headers["x-slack-signature"] as
+        | string
+        | undefined;
+
+      const verifiableConnections = slackConnections
+        .map((connection) => {
+          const config = normalizeSlackConfig(connection.configJson);
+          return {
+            connection,
+            signingSecret: config.signingSecret || defaultSlackSigningSecret,
+          };
+        })
+        .filter((entry) => entry.signingSecret);
+
+      if (verifiableConnections.length === 0) {
+        return reply.status(500).send({
+          error: "Slack signing secret is not configured.",
+          code: "slack_signing_secret_missing",
+        });
+      }
+
+      const matchedConnection = verifiableConnections.find((entry) => {
+        const verifier = new SlackWebhookHandler(
+          { signingSecret: entry.signingSecret },
+          reviewApprovalSurfaceService,
+        );
+        return verifier.verifySignature(rawBody, timestamp, signature);
       });
-    }
 
-    const rawBody = request.slackRawBody;
-    if (!rawBody) {
-      return reply.status(500).send({
-        error: "Raw webhook body was not captured for signature verification.",
-        code: "webhook_raw_body_missing",
-      });
-    }
+      if (!matchedConnection) {
+        return reply.status(401).send({
+          error: "Invalid Slack webhook signature.",
+          code: "webhook_signature_invalid",
+        });
+      }
 
-    const timestamp = request.headers["x-slack-request-timestamp"] as string | undefined;
-    const signature = request.headers["x-slack-signature"] as string | undefined;
-
-    const verifiableConnections = slackConnections
-      .map((connection) => {
-        const config = normalizeSlackConfig(connection.configJson);
-        return {
-          connection,
-          signingSecret: config.signingSecret || defaultSlackSigningSecret,
-        };
-      })
-      .filter((entry) => entry.signingSecret);
-
-    if (verifiableConnections.length === 0) {
-      return reply.status(500).send({
-        error: "Slack signing secret is not configured.",
-        code: "slack_signing_secret_missing",
-      });
-    }
-
-    const matchedConnection = verifiableConnections.find((entry) => {
-      const verifier = new SlackWebhookHandler(
-        { signingSecret: entry.signingSecret },
+      const webhookHandler = new SlackWebhookHandler(
+        { signingSecret: matchedConnection.signingSecret },
         reviewApprovalSurfaceService,
       );
-      return verifier.verifySignature(rawBody, timestamp, signature);
-    });
 
-    if (!matchedConnection) {
-      return reply.status(401).send({
-        error: "Invalid Slack webhook signature.",
-        code: "webhook_signature_invalid",
-      });
-    }
+      try {
+        const payload = SlackWebhookHandler.parseFormEncodedPayload(rawBody);
+        const result = await webhookHandler.processInteraction(payload);
 
-    const webhookHandler = new SlackWebhookHandler(
-      { signingSecret: matchedConnection.signingSecret },
-      reviewApprovalSurfaceService,
-    );
-
-    try {
-      const payload = SlackWebhookHandler.parseFormEncodedPayload(rawBody);
-      const result = await webhookHandler.processInteraction(payload);
-
-      // Slack expects a 200 response to acknowledge receipt
-      return reply.send({
-        processed: result.processed,
-        skipped: result.skipped,
-        errors: result.errors.length,
-      });
-    } catch (error) {
-      return reply.status(400).send({
-        error: error instanceof Error ? error.message : "Slack interaction payload is invalid.",
-        code: "slack_payload_invalid",
-      });
-    }
-  });
+        // Slack expects a 200 response to acknowledge receipt
+        return reply.send({
+          processed: result.processed,
+          skipped: result.skipped,
+          errors: result.errors.length,
+        });
+      } catch (error) {
+        return reply.status(400).send({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Slack interaction payload is invalid.",
+          code: "slack_payload_invalid",
+        });
+      }
+    },
+  );
 
   // POST /api/runtime/reviews/:id/approval-surfaces/slack/notify
   // Triggers outbound Slack approval prompt delivery
-  app.post("/api/runtime/reviews/:id/approval-surfaces/slack/notify", async (request, reply) => {
-    ensureRuntimeApi(request);
+  app.post(
+    "/api/runtime/reviews/:id/approval-surfaces/slack/notify",
+    async (request, reply) => {
+      ensureRuntimeApi(request);
 
-    const { id } = request.params as { id: string };
-    const workspaceId = (request.body as { workspace_id?: string })?.workspace_id ?? "";
-    if (!workspaceId) {
-      return reply.status(400).send({
-        error: "workspace_id is required.",
-        code: "missing_workspace_id",
-      });
-    }
+      const { id } = request.params as { id: string };
+      const workspaceId =
+        (request.body as { workspace_id?: string })?.workspace_id ?? "";
+      if (!workspaceId) {
+        return reply.status(400).send({
+          error: "workspace_id is required.",
+          code: "missing_workspace_id",
+        });
+      }
 
-    const resolved = await resolveWorkspaceSlackTransport(workspaceId);
-    if (!resolved) {
-      return reply.status(501).send({
-        error: "Slack transport is not configured for this workspace.",
-        code: "slack_not_configured",
-      });
-    }
+      const resolved = await resolveWorkspaceSlackTransport(workspaceId);
+      if (!resolved) {
+        return reply.status(501).send({
+          error: "Slack transport is not configured for this workspace.",
+          code: "slack_not_configured",
+        });
+      }
 
-    const { review, recipients } =
-      await reviewApprovalSurfaceService.buildSlackApprovalActions(
-        workspaceId,
-        { reviewId: id },
+      const { review, recipients } =
+        await reviewApprovalSurfaceService.buildSlackApprovalActions(
+          workspaceId,
+          { reviewId: id },
+        );
+
+      if (recipients.length === 0) {
+        return reply.send({
+          review_id: review.id,
+          sent: 0,
+          failed: 0,
+          errors: [],
+          message: "No eligible Slack recipients found for this review.",
+        });
+      }
+
+      const result = await resolved.transport.sendApprovalPrompt(
+        review,
+        recipients,
       );
 
-    if (recipients.length === 0) {
       return reply.send({
         review_id: review.id,
-        sent: 0,
-        failed: 0,
-        errors: [],
-        message: "No eligible Slack recipients found for this review.",
+        ...result,
       });
-    }
-
-    const result = await resolved.transport.sendApprovalPrompt(review, recipients);
-
-    return reply.send({
-      review_id: review.id,
-      ...result,
-    });
-  });
+    },
+  );
 
   // ---------------------------------------------------------------------------
   // n8n webhook callback
   // ---------------------------------------------------------------------------
 
-  app.post("/api/webhooks/n8n/:workspaceId/:connectionId/callback", async (request, reply) => {
-    const params = request.params as {
-      workspaceId?: string;
-      connectionId?: string;
-    };
+  app.post(
+    "/api/webhooks/n8n/:workspaceId/:connectionId/callback",
+    async (request, reply) => {
+      const params = request.params as {
+        workspaceId?: string;
+        connectionId?: string;
+      };
 
-    if (!params.workspaceId || !params.connectionId) {
-      return reply.status(400).send({
-        error: "Missing required route parameters: workspaceId, connectionId.",
-        code: "n8n_webhook_route_invalid",
-      });
-    }
+      if (!params.workspaceId || !params.connectionId) {
+        return reply.status(400).send({
+          error:
+            "Missing required route parameters: workspaceId, connectionId.",
+          code: "n8n_webhook_route_invalid",
+        });
+      }
 
-    let connection;
-    try {
-      connection = await runtimeConnectionService.getStoredById(
-        params.workspaceId,
-        params.connectionId,
+      let connection;
+      try {
+        connection = await runtimeConnectionService.getStoredById(
+          params.workspaceId,
+          params.connectionId,
+        );
+      } catch (error) {
+        if (error instanceof ConnectionNotFoundError) {
+          return reply.status(404).send({
+            error: error.message,
+            code: error.code,
+          });
+        }
+        throw error;
+      }
+      if (
+        connection.provider !== "n8n" ||
+        connection.accessMode !== "write_capable" ||
+        connection.status !== "connected"
+      ) {
+        return reply.status(409).send({
+          error:
+            "n8n callback is only available for connected write-capable n8n backends.",
+          code: "n8n_webhook_not_ready",
+        });
+      }
+
+      const config = n8nConnectionConfigSchema.safeParse(
+        connection.configJson ?? {},
       );
-    } catch (error) {
-      if (error instanceof ConnectionNotFoundError) {
-        return reply.status(404).send({
-          error: error.message,
-          code: error.code,
+      if (!config.success) {
+        return reply.status(409).send({
+          error: "n8n callback auth is not configured for this connection.",
+          code: "n8n_webhook_not_ready",
         });
       }
-      throw error;
-    }
-    if (
-      connection.provider !== "n8n"
-      || connection.accessMode !== "write_capable"
-      || connection.status !== "connected"
-    ) {
-      return reply.status(409).send({
-        error: "n8n callback is only available for connected write-capable n8n backends.",
-        code: "n8n_webhook_not_ready",
-      });
-    }
 
-    const config = n8nConnectionConfigSchema.safeParse(connection.configJson ?? {});
-    if (!config.success) {
-      return reply.status(409).send({
-        error: "n8n callback auth is not configured for this connection.",
-        code: "n8n_webhook_not_ready",
+      ensureWebhookToken(request, config.data.auth_token, {
+        headerName: "x-clawback-webhook-token",
       });
-    }
 
-    ensureWebhookToken(request, config.data.auth_token, {
-      headerName: "x-clawback-webhook-token",
-    });
-
-    try {
-      const result = await n8nWebhookCallbackService.recordCallback(params.workspaceId, {
-        connectionId: params.connectionId,
-        payload: request.body,
-      });
-      return reply.send(result);
-    } catch (error) {
-      if (error instanceof N8nWebhookCallbackError) {
-        return reply.status(error.statusCode).send({
-          error: error.message,
-          code: error.code,
-        });
+      try {
+        const result = await n8nWebhookCallbackService.recordCallback(
+          params.workspaceId,
+          {
+            connectionId: params.connectionId,
+            payload: request.body,
+          },
+        );
+        return reply.send(result);
+      } catch (error) {
+        if (error instanceof N8nWebhookCallbackError) {
+          return reply.status(error.statusCode).send({
+            error: error.message,
+            code: error.code,
+          });
+        }
+        throw error;
       }
-      throw error;
-    }
-  });
+    },
+  );
 
   // ---------------------------------------------------------------------------
   // Inbound email webhook (T8)
@@ -1737,7 +1983,12 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
       attachments: Array.isArray(body.attachments) ? body.attachments : [],
     };
 
-    if (!payload.message_id || !payload.from || !payload.to || !payload.subject) {
+    if (
+      !payload.message_id ||
+      !payload.from ||
+      !payload.to ||
+      !payload.subject
+    ) {
       return reply.status(400).send({
         error: "Missing required fields: message_id, from, to, subject.",
       });
@@ -1748,13 +1999,19 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
       return reply.status(result.deduplicated ? 200 : 201).send(result);
     } catch (error) {
       if (error instanceof InboundEmailRoutingError) {
-        return reply.status(404).send({ error: error.message, code: error.code });
+        return reply
+          .status(404)
+          .send({ error: error.message, code: error.code });
       }
       if (error instanceof InboundEmailWorkerNotFoundError) {
-        return reply.status(404).send({ error: error.message, code: error.code });
+        return reply
+          .status(404)
+          .send({ error: error.message, code: error.code });
       }
       if (error instanceof InboundEmailWorkerRuntimeNotAvailableError) {
-        return reply.status(409).send({ error: error.message, code: error.code });
+        return reply
+          .status(409)
+          .send({ error: error.message, code: error.code });
       }
       throw error;
     }
@@ -1775,16 +2032,24 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
       });
     } catch (error) {
       if (error instanceof InboundEmailWebhookParseError) {
-        return reply.status(error.statusCode).send({ error: error.message, code: error.code });
+        return reply
+          .status(error.statusCode)
+          .send({ error: error.message, code: error.code });
       }
       if (error instanceof InboundEmailRoutingError) {
-        return reply.status(404).send({ error: error.message, code: error.code });
+        return reply
+          .status(404)
+          .send({ error: error.message, code: error.code });
       }
       if (error instanceof InboundEmailWorkerNotFoundError) {
-        return reply.status(404).send({ error: error.message, code: error.code });
+        return reply
+          .status(404)
+          .send({ error: error.message, code: error.code });
       }
       if (error instanceof InboundEmailWorkerRuntimeNotAvailableError) {
-        return reply.status(409).send({ error: error.message, code: error.code });
+        return reply
+          .status(409)
+          .send({ error: error.message, code: error.code });
       }
       throw error;
     }
@@ -1799,88 +2064,126 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
 
     const body = request.body as Record<string, unknown>;
     const payload = {
-      external_message_id: typeof body.external_message_id === "string" ? body.external_message_id : "",
+      external_message_id:
+        typeof body.external_message_id === "string"
+          ? body.external_message_id
+          : "",
       worker_id: typeof body.worker_id === "string" ? body.worker_id : "",
-      workspace_id: typeof body.workspace_id === "string" ? body.workspace_id : "",
+      workspace_id:
+        typeof body.workspace_id === "string" ? body.workspace_id : "",
       from: typeof body.from === "string" ? body.from : "",
       subject: typeof body.subject === "string" ? body.subject : "",
       body_text: typeof body.body_text === "string" ? body.body_text : "",
       body_html: typeof body.body_html === "string" ? body.body_html : null,
-      thread_summary: typeof body.thread_summary === "string" ? body.thread_summary : null,
+      thread_summary:
+        typeof body.thread_summary === "string" ? body.thread_summary : null,
     };
 
-    if (!payload.external_message_id || !payload.worker_id || !payload.workspace_id || !payload.from || !payload.subject) {
+    if (
+      !payload.external_message_id ||
+      !payload.worker_id ||
+      !payload.workspace_id ||
+      !payload.from ||
+      !payload.subject
+    ) {
       return reply.status(400).send({
-        error: "Missing required fields: external_message_id, worker_id, workspace_id, from, subject.",
+        error:
+          "Missing required fields: external_message_id, worker_id, workspace_id, from, subject.",
       });
     }
 
     try {
-      const result = await watchedInboxService.processWatchedInboxEvent(payload);
+      const result =
+        await watchedInboxService.processWatchedInboxEvent(payload);
       return reply.status(result.deduplicated ? 200 : 201).send(result);
     } catch (error) {
       if (error instanceof WatchedInboxRouteNotFoundError) {
-        return reply.status(404).send({ error: error.message, code: error.code });
+        return reply
+          .status(404)
+          .send({ error: error.message, code: error.code });
       }
       if (error instanceof WatchedInboxWorkerNotFoundError) {
-        return reply.status(404).send({ error: error.message, code: error.code });
+        return reply
+          .status(404)
+          .send({ error: error.message, code: error.code });
       }
       if (error instanceof WatchedInboxWorkerRuntimeNotAvailableError) {
-        return reply.status(409).send({ error: error.message, code: error.code });
+        return reply
+          .status(409)
+          .send({ error: error.message, code: error.code });
       }
       if (error instanceof GmailConnectionNotReadyError) {
-        return reply.status(409).send({ error: error.message, code: error.code });
+        return reply
+          .status(409)
+          .send({ error: error.message, code: error.code });
       }
       throw error;
     }
   });
 
-  app.post("/api/inbound/gmail-watch/:workspaceId/:connectionId", async (request, reply) => {
-    ensureWebhookToken(request, gmailWatchHookToken, {
-      headerName: "x-gog-token",
-      alternateHeaderNames: ["x-clawback-webhook-token"],
-    });
-
-    const params = request.params as {
-      workspaceId?: string;
-      connectionId?: string;
-    };
-
-    if (!params.workspaceId || !params.connectionId) {
-      return reply.status(400).send({
-        error: "Missing required route parameters: workspaceId, connectionId.",
+  app.post(
+    "/api/inbound/gmail-watch/:workspaceId/:connectionId",
+    async (request, reply) => {
+      ensureWebhookToken(request, gmailWatchHookToken, {
+        headerName: "x-gog-token",
+        alternateHeaderNames: ["x-clawback-webhook-token"],
       });
-    }
 
-    try {
-      const connection = await connectionServiceInstance.getStoredById(
-        params.workspaceId,
-        params.connectionId,
-      );
-      const result = await gmailWatchHookService.processConnectionHook(connection, request.body);
-      const allDeduplicated =
-        result.created_results.length > 0
-        && result.deduplicated_results === result.created_results.length;
-      return reply.status(allDeduplicated ? 200 : 201).send(result);
-    } catch (error) {
-      if (error instanceof GmailWatchHookProcessingError) {
-        return reply.status(error.statusCode).send({ error: error.message, code: error.code });
+      const params = request.params as {
+        workspaceId?: string;
+        connectionId?: string;
+      };
+
+      if (!params.workspaceId || !params.connectionId) {
+        return reply.status(400).send({
+          error:
+            "Missing required route parameters: workspaceId, connectionId.",
+        });
       }
-      if (error instanceof WatchedInboxRouteNotFoundError) {
-        return reply.status(error.statusCode).send({ error: error.message, code: error.code });
+
+      try {
+        const connection = await connectionServiceInstance.getStoredById(
+          params.workspaceId,
+          params.connectionId,
+        );
+        const result = await gmailWatchHookService.processConnectionHook(
+          connection,
+          request.body,
+        );
+        const allDeduplicated =
+          result.created_results.length > 0 &&
+          result.deduplicated_results === result.created_results.length;
+        return reply.status(allDeduplicated ? 200 : 201).send(result);
+      } catch (error) {
+        if (error instanceof GmailWatchHookProcessingError) {
+          return reply
+            .status(error.statusCode)
+            .send({ error: error.message, code: error.code });
+        }
+        if (error instanceof WatchedInboxRouteNotFoundError) {
+          return reply
+            .status(error.statusCode)
+            .send({ error: error.message, code: error.code });
+        }
+        if (error instanceof WatchedInboxWorkerNotFoundError) {
+          return reply
+            .status(error.statusCode)
+            .send({ error: error.message, code: error.code });
+        }
+        if (error instanceof WatchedInboxWorkerRuntimeNotAvailableError) {
+          return reply
+            .status(error.statusCode)
+            .send({ error: error.message, code: error.code });
+        }
+        if (error instanceof GmailConnectionNotReadyError) {
+          return reply
+            .status(error.statusCode)
+            .send({ error: error.message, code: error.code });
+        }
+        throw error;
       }
-      if (error instanceof WatchedInboxWorkerNotFoundError) {
-        return reply.status(error.statusCode).send({ error: error.message, code: error.code });
-      }
-      if (error instanceof WatchedInboxWorkerRuntimeNotAvailableError) {
-        return reply.status(error.statusCode).send({ error: error.message, code: error.code });
-      }
-      if (error instanceof GmailConnectionNotReadyError) {
-        return reply.status(error.statusCode).send({ error: error.message, code: error.code });
-      }
-      throw error;
-    }
-  });
+    },
+  );
 
   app.get("/api/agents", async (request, reply) => {
     const actor = ensureSession(request);
@@ -1894,17 +2197,26 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
     return reply.send(connectorListResponseSchema.parse(result));
   });
 
-  app.post("/api/connectors", { onRequest: [app.csrfProtection] }, async (request, reply) => {
-    const actor = ensureSession(request);
-    const parsed = createConnectorRequestSchema.parse(request.body);
-    const result = await connectorService.createConnector(actor, parsed);
-    return reply.status(201).send(createConnectorResponseSchema.parse(result));
-  });
+  app.post(
+    "/api/connectors",
+    { onRequest: [app.csrfProtection] },
+    async (request, reply) => {
+      const actor = ensureSession(request);
+      const parsed = createConnectorRequestSchema.parse(request.body);
+      const result = await connectorService.createConnector(actor, parsed);
+      return reply
+        .status(201)
+        .send(createConnectorResponseSchema.parse(result));
+    },
+  );
 
   app.get("/api/connectors/:connectorId", async (request, reply) => {
     const actor = ensureSession(request);
     const params = connectorPathParamsSchema.parse(request.params);
-    const result = await connectorService.getConnector(actor, params.connectorId);
+    const result = await connectorService.getConnector(
+      actor,
+      params.connectorId,
+    );
     return reply.send(getConnectorResponseSchema.parse(result));
   });
 
@@ -1915,7 +2227,11 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
       const actor = ensureSession(request);
       const params = connectorPathParamsSchema.parse(request.params);
       const parsed = updateConnectorRequestSchema.parse(request.body);
-      const result = await connectorService.updateConnector(actor, params.connectorId, parsed);
+      const result = await connectorService.updateConnector(
+        actor,
+        params.connectorId,
+        parsed,
+      );
       return reply.send(getConnectorResponseSchema.parse(result));
     },
   );
@@ -1923,7 +2239,10 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
   app.get("/api/connectors/:connectorId/sync-jobs", async (request, reply) => {
     const actor = ensureSession(request);
     const params = connectorPathParamsSchema.parse(request.params);
-    const result = await connectorService.listSyncJobs(actor, params.connectorId);
+    const result = await connectorService.listSyncJobs(
+      actor,
+      params.connectorId,
+    );
     return reply.send(connectorSyncJobListResponseSchema.parse(result));
   });
 
@@ -1933,17 +2252,26 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
     async (request, reply) => {
       const actor = ensureSession(request);
       const params = connectorPathParamsSchema.parse(request.params);
-      const result = await connectorService.requestSync(actor, params.connectorId);
-      return reply.status(202).send(requestConnectorSyncResponseSchema.parse(result));
+      const result = await connectorService.requestSync(
+        actor,
+        params.connectorId,
+      );
+      return reply
+        .status(202)
+        .send(requestConnectorSyncResponseSchema.parse(result));
     },
   );
 
-  app.post("/api/agents", { onRequest: [app.csrfProtection] }, async (request, reply) => {
-    const actor = ensureSession(request);
-    const parsed = createAgentRequestSchema.parse(request.body);
-    const result = await agentService.createAgent(actor, parsed);
-    return reply.status(201).send(createAgentResponseSchema.parse(result));
-  });
+  app.post(
+    "/api/agents",
+    { onRequest: [app.csrfProtection] },
+    async (request, reply) => {
+      const actor = ensureSession(request);
+      const parsed = createAgentRequestSchema.parse(request.body);
+      const result = await agentService.createAgent(actor, parsed);
+      return reply.status(201).send(createAgentResponseSchema.parse(result));
+    },
+  );
 
   app.get("/api/agents/:agentId", async (request, reply) => {
     const actor = ensureSession(request);
@@ -1952,13 +2280,21 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
     return reply.send(getAgentResponseSchema.parse(result));
   });
 
-  app.patch("/api/agents/:agentId", { onRequest: [app.csrfProtection] }, async (request, reply) => {
-    const actor = ensureSession(request);
-    const params = agentPathParamsSchema.parse(request.params);
-    const parsed = updateAgentRequestSchema.parse(request.body);
-    const result = await agentService.updateAgent(actor, params.agentId, parsed);
-    return reply.send(getAgentResponseSchema.parse(result));
-  });
+  app.patch(
+    "/api/agents/:agentId",
+    { onRequest: [app.csrfProtection] },
+    async (request, reply) => {
+      const actor = ensureSession(request);
+      const params = agentPathParamsSchema.parse(request.params);
+      const parsed = updateAgentRequestSchema.parse(request.body);
+      const result = await agentService.updateAgent(
+        actor,
+        params.agentId,
+        parsed,
+      );
+      return reply.send(getAgentResponseSchema.parse(result));
+    },
+  );
 
   app.get("/api/agents/:agentId/draft", async (request, reply) => {
     const actor = ensureSession(request);
@@ -1974,7 +2310,11 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
       const actor = ensureSession(request);
       const params = agentPathParamsSchema.parse(request.params);
       const parsed = updateAgentDraftRequestSchema.parse(request.body);
-      const result = await agentService.updateDraft(actor, params.agentId, parsed);
+      const result = await agentService.updateDraft(
+        actor,
+        params.agentId,
+        parsed,
+      );
       return reply.send(getAgentDraftResponseSchema.parse(result));
     },
   );
@@ -1986,7 +2326,11 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
       const actor = ensureSession(request);
       const params = agentPathParamsSchema.parse(request.params);
       const parsed = publishAgentRequestSchema.parse(request.body);
-      const result = await agentService.publishAgent(actor, params.agentId, parsed);
+      const result = await agentService.publishAgent(
+        actor,
+        params.agentId,
+        parsed,
+      );
       return reply.send(publishAgentResponseSchema.parse(result));
     },
   );
@@ -1998,26 +2342,48 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
     return reply.send(conversationListResponseSchema.parse(result));
   });
 
-  app.post("/api/conversations", { onRequest: [app.csrfProtection] }, async (request, reply) => {
-    const actor = ensureSession(request);
-    const parsed = createConversationRequestSchema.parse(request.body);
-    const result = await conversationRunService.createConversation(actor, parsed);
-    return reply.status(201).send(createConversationResponseSchema.parse(result));
-  });
+  app.post(
+    "/api/conversations",
+    {
+      onRequest: [app.csrfProtection],
+      config: { rateLimit: { max: 12, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const actor = ensureSession(request);
+      const parsed = createConversationRequestSchema.parse(request.body);
+      const result = await conversationRunService.createConversation(
+        actor,
+        parsed,
+      );
+      return reply
+        .status(201)
+        .send(createConversationResponseSchema.parse(result));
+    },
+  );
 
   app.get("/api/conversations/:conversationId", async (request, reply) => {
     const actor = ensureSession(request);
     const params = conversationPathParamsSchema.parse(request.params);
-    const result = await conversationRunService.getConversation(actor, params.conversationId);
+    const result = await conversationRunService.getConversation(
+      actor,
+      params.conversationId,
+    );
     return reply.send(conversationDetailResponseSchema.parse(result));
   });
 
-  app.post("/api/runs", { onRequest: [app.csrfProtection] }, async (request, reply) => {
-    const actor = ensureSession(request);
-    const parsed = createRunRequestSchema.parse(request.body);
-    const result = await conversationRunService.createRun(actor, parsed);
-    return reply.status(201).send(createRunResponseSchema.parse(result));
-  });
+  app.post(
+    "/api/runs",
+    {
+      onRequest: [app.csrfProtection],
+      config: { rateLimit: { max: 8, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const actor = ensureSession(request);
+      const parsed = createRunRequestSchema.parse(request.body);
+      const result = await conversationRunService.createRun(actor, parsed);
+      return reply.status(201).send(createRunResponseSchema.parse(result));
+    },
+  );
 
   app.get("/api/runs/:runId", async (request, reply) => {
     const actor = ensureSession(request);
@@ -2029,7 +2395,10 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
   app.get("/api/runs/:runId/events", async (request, reply) => {
     const actor = ensureSession(request);
     const params = runPathParamsSchema.parse(request.params);
-    const events = await conversationRunService.listRunEvents(actor, params.runId);
+    const events = await conversationRunService.listRunEvents(
+      actor,
+      params.runId,
+    );
     return reply.send(
       runEventListResponseSchema.parse({
         events,
@@ -2040,7 +2409,10 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
   app.get("/api/runs/:runId/stream", async (request, reply) => {
     const actor = ensureSession(request);
     const params = runPathParamsSchema.parse(request.params);
-    const context = await conversationRunService.getRunStreamContext(actor, params.runId);
+    const context = await conversationRunService.getRunStreamContext(
+      actor,
+      params.runId,
+    );
 
     request.raw.setTimeout?.(0);
     request.raw.socket?.setKeepAlive?.(true, 15_000);
@@ -2060,7 +2432,11 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
     let keepaliveAt = Date.now();
 
     while (!closed) {
-      const events = await conversationRunService.listRunEventsAfter(actor, params.runId, lastSequence);
+      const events = await conversationRunService.listRunEventsAfter(
+        actor,
+        params.runId,
+        lastSequence,
+      );
 
       for (const event of events) {
         const envelope = mapRunEventToSseEnvelope({
@@ -2095,7 +2471,10 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
         keepaliveAt = Date.now();
       }
 
-      const refreshedContext = await conversationRunService.getRunStreamContext(actor, params.runId);
+      const refreshedContext = await conversationRunService.getRunStreamContext(
+        actor,
+        params.runId,
+      );
       if (refreshedContext.terminal && events.length === 0) {
         break;
       }
@@ -2113,7 +2492,10 @@ export async function createControlPlaneApp(options: ControlPlaneAppOptions = {}
   await app.register(workspaceRoutesPlugin, {
     services: {
       ...workspaceReadModelServices,
-      gmailPollingService: workspaceReadModelServices.gmailPollingService ?? gmailPollingService,
+      inboundEmailService:
+        workspaceReadModelServices.inboundEmailService ?? inboundEmailService,
+      gmailPollingService:
+        workspaceReadModelServices.gmailPollingService ?? gmailPollingService,
     },
   });
   gmailPollingService.start();

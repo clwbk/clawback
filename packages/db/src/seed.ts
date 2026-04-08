@@ -1,12 +1,15 @@
 import argon2 from "argon2";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { PgBoss } from "pg-boss";
 import { ulid } from "ulid";
 
 import { createDb, createPool, getDatabaseUrl } from "./client.js";
 import {
+  agents,
+  agentVersions,
   actionCapabilities,
   activityEvents,
+  connectorSyncJobs,
   connections,
   connectors,
   identities,
@@ -44,6 +47,43 @@ function normalizeStringArray(value: unknown): string[] {
 }
 
 const CONNECTOR_SYNC_JOB_NAME = "connector.sync";
+const INCIDENT_DEMO_CONNECTOR_NAME = "Incident Copilot Demo";
+const INCIDENT_DEMO_CONNECTOR_ROOT = "./packages/retrieval/demo-corpus/incident-copilot";
+const INCIDENT_DEMO_CONNECTOR_EXTENSIONS = [".txt", ".md", ".mdx", ".json", ".yaml", ".yml"];
+const INCIDENT_COPILOT_AGENT_NAME = "Incident Copilot";
+const INCIDENT_COPILOT_AGENT_SLUG = "incident-copilot";
+const INCIDENT_COPILOT_INSTRUCTIONS = [
+  "You are an incident-response copilot.",
+  "",
+  "Use connected knowledge to explain what happened, cite evidence clearly, and keep outputs structured.",
+  "You have access to the Clawback ticket tools ticket_lookup, draft_ticket, and create_ticket.",
+  "When a next step should become a tracked follow-up, call draft_ticket to prepare a structured ticket draft instead of only describing the ticket in prose.",
+  "If the user explicitly asks you to create or proceed with the follow-up, call create_ticket with the draft details.",
+  "Do not claim that you lack access, permission, or capability to create the ticket when create_ticket is enabled. If approval is required, the runtime will pause automatically.",
+  "Only request risky actions when the user explicitly wants the system to proceed.",
+].join("\n");
+const INCIDENT_COPILOT_MODEL_ROUTING = {
+  provider: "openai-compatible",
+  model: "gpt-4.1",
+};
+const INCIDENT_COPILOT_TOOL_POLICY = {
+  mode: "allow_list",
+  allowed_tools: ["ticket_lookup", "draft_ticket", "create_ticket"],
+  tool_rules: {
+    ticket_lookup: {
+      risk_class: "safe",
+      approval: "never",
+    },
+    draft_ticket: {
+      risk_class: "guarded",
+      approval: "never",
+    },
+    create_ticket: {
+      risk_class: "approval_gated",
+      approval: "workspace_admin",
+    },
+  },
+} as const;
 
 async function enqueueInitialConnectorSync(params: {
   databaseUrl: string;
@@ -102,6 +142,242 @@ async function enqueueInitialConnectorSync(params: {
 
   await boss.stop();
   return syncJobId;
+}
+
+async function ensureIncidentCopilotDemo(params: {
+  db: ReturnType<typeof createDb>;
+  databaseUrl: string;
+  workspaceId: string;
+  userId: string;
+  now: Date;
+}) {
+  const expectedConnectorConfig = {
+    root_path: INCIDENT_DEMO_CONNECTOR_ROOT,
+    recursive: true,
+    include_extensions: INCIDENT_DEMO_CONNECTOR_EXTENSIONS,
+  };
+
+  const existingConnector = await params.db.query.connectors.findFirst({
+    where: and(
+      eq(connectors.workspaceId, params.workspaceId),
+      eq(connectors.name, INCIDENT_DEMO_CONNECTOR_NAME),
+    ),
+  });
+
+  let connectorId = existingConnector?.id ?? cid("ctr");
+  let connectorNeedsSync = false;
+
+  if (!existingConnector) {
+    await params.db.insert(connectors).values({
+      id: connectorId,
+      workspaceId: params.workspaceId,
+      type: "local_directory",
+      name: INCIDENT_DEMO_CONNECTOR_NAME,
+      status: "active",
+      configJson: expectedConnectorConfig,
+      createdBy: params.userId,
+      createdAt: params.now,
+      updatedAt: params.now,
+    });
+    console.log(`    created demo connector: ${INCIDENT_DEMO_CONNECTOR_NAME}`);
+    connectorNeedsSync = true;
+  } else {
+    const config = normalizeSettingsJson(existingConnector.configJson);
+    const includeExtensions = normalizeStringArray(config.include_extensions);
+    const missingExtension = INCIDENT_DEMO_CONNECTOR_EXTENSIONS.some(
+      (extension) => !includeExtensions.includes(extension),
+    );
+    const needsConnectorUpdate =
+      existingConnector.status !== "active" ||
+      config.root_path !== INCIDENT_DEMO_CONNECTOR_ROOT ||
+      config.recursive !== true ||
+      missingExtension;
+
+    if (needsConnectorUpdate) {
+      await params.db
+        .update(connectors)
+        .set({
+          status: "active",
+          configJson: expectedConnectorConfig,
+          updatedAt: params.now,
+        })
+        .where(eq(connectors.id, connectorId));
+      console.log(`    refreshed demo connector: ${INCIDENT_DEMO_CONNECTOR_NAME}`);
+      connectorNeedsSync = true;
+    }
+  }
+
+  const latestSyncJob = await params.db
+    .select({
+      id: connectorSyncJobs.id,
+      status: connectorSyncJobs.status,
+    })
+    .from(connectorSyncJobs)
+    .where(
+      and(
+        eq(connectorSyncJobs.workspaceId, params.workspaceId),
+        eq(connectorSyncJobs.connectorId, connectorId),
+      ),
+    )
+    .orderBy(desc(connectorSyncJobs.createdAt))
+    .limit(1);
+
+  if (
+    connectorNeedsSync ||
+    latestSyncJob.length === 0 ||
+    latestSyncJob[0]?.status === "failed"
+  ) {
+    const syncJobId = await enqueueInitialConnectorSync({
+      databaseUrl: params.databaseUrl,
+      workspaceId: params.workspaceId,
+      connectorId,
+      requestedBy: params.userId,
+      now: params.now,
+    });
+    console.log(`    queued incident demo sync job (${syncJobId})`);
+  }
+
+  const existingAgent = await params.db.query.agents.findFirst({
+    where: and(
+      eq(agents.workspaceId, params.workspaceId),
+      eq(agents.slug, INCIDENT_COPILOT_AGENT_SLUG),
+    ),
+  });
+
+  const agentId = existingAgent?.id ?? cid("agt");
+  if (!existingAgent) {
+    await params.db.insert(agents).values({
+      id: agentId,
+      workspaceId: params.workspaceId,
+      name: INCIDENT_COPILOT_AGENT_NAME,
+      slug: INCIDENT_COPILOT_AGENT_SLUG,
+      scope: "shared",
+      ownerUserId: null,
+      status: "active",
+      createdBy: params.userId,
+      createdAt: params.now,
+      updatedAt: params.now,
+    });
+    console.log(`    created shared agent: ${INCIDENT_COPILOT_AGENT_NAME}`);
+  } else if (
+    existingAgent.name !== INCIDENT_COPILOT_AGENT_NAME ||
+    existingAgent.status !== "active"
+  ) {
+    await params.db
+      .update(agents)
+      .set({
+        name: INCIDENT_COPILOT_AGENT_NAME,
+        status: "active",
+        updatedAt: params.now,
+      })
+      .where(eq(agents.id, agentId));
+  }
+
+  const versionRows = await params.db
+    .select()
+    .from(agentVersions)
+    .where(
+      and(
+        eq(agentVersions.workspaceId, params.workspaceId),
+        eq(agentVersions.agentId, agentId),
+      ),
+    )
+    .orderBy(desc(agentVersions.versionNumber), desc(agentVersions.createdAt));
+
+  const publishedVersion = versionRows.find((row) => row.status === "published") ?? null;
+  const draftVersion = versionRows.find((row) => row.status === "draft") ?? null;
+  const maxVersionNumber = versionRows[0]?.versionNumber ?? 0;
+  const connectorPolicy = {
+    enabled: true,
+    connector_ids: [connectorId],
+  };
+
+  let publishedVersionNumber = publishedVersion?.versionNumber ?? maxVersionNumber;
+  let promotedDraftToPublished = false;
+
+  if (!publishedVersion) {
+    if (draftVersion) {
+      await params.db
+        .update(agentVersions)
+        .set({
+          status: "published",
+          personaJson: {},
+          instructionsMarkdown: INCIDENT_COPILOT_INSTRUCTIONS,
+          modelRoutingJson: INCIDENT_COPILOT_MODEL_ROUTING,
+          toolPolicyJson: INCIDENT_COPILOT_TOOL_POLICY,
+          connectorPolicyJson: connectorPolicy,
+          publishedAt: params.now,
+        })
+        .where(eq(agentVersions.id, draftVersion.id));
+      publishedVersionNumber = draftVersion.versionNumber;
+      promotedDraftToPublished = true;
+    } else {
+      publishedVersionNumber = 1;
+      await params.db.insert(agentVersions).values({
+        id: cid("agtv"),
+        workspaceId: params.workspaceId,
+        agentId,
+        versionNumber: publishedVersionNumber,
+        status: "published",
+        personaJson: {},
+        instructionsMarkdown: INCIDENT_COPILOT_INSTRUCTIONS,
+        modelRoutingJson: INCIDENT_COPILOT_MODEL_ROUTING,
+        toolPolicyJson: INCIDENT_COPILOT_TOOL_POLICY,
+        connectorPolicyJson: connectorPolicy,
+        createdBy: params.userId,
+        createdAt: params.now,
+        publishedAt: params.now,
+      });
+    }
+  } else {
+    await params.db
+      .update(agentVersions)
+      .set({
+        personaJson: {},
+        instructionsMarkdown: INCIDENT_COPILOT_INSTRUCTIONS,
+        modelRoutingJson: INCIDENT_COPILOT_MODEL_ROUTING,
+        toolPolicyJson: INCIDENT_COPILOT_TOOL_POLICY,
+        connectorPolicyJson: connectorPolicy,
+        publishedAt: publishedVersion.publishedAt ?? params.now,
+      })
+      .where(eq(agentVersions.id, publishedVersion.id));
+  }
+
+  if (!draftVersion || promotedDraftToPublished) {
+    await params.db.insert(agentVersions).values({
+      id: cid("agtv"),
+      workspaceId: params.workspaceId,
+      agentId,
+      versionNumber: publishedVersionNumber + 1,
+      status: "draft",
+      personaJson: {},
+      instructionsMarkdown: INCIDENT_COPILOT_INSTRUCTIONS,
+      modelRoutingJson: INCIDENT_COPILOT_MODEL_ROUTING,
+      toolPolicyJson: INCIDENT_COPILOT_TOOL_POLICY,
+      connectorPolicyJson: connectorPolicy,
+      createdBy: params.userId,
+      createdAt: params.now,
+      publishedAt: null,
+    });
+  } else {
+    await params.db
+      .update(agentVersions)
+      .set({
+        status: "draft",
+        personaJson: {},
+        instructionsMarkdown: INCIDENT_COPILOT_INSTRUCTIONS,
+        modelRoutingJson: INCIDENT_COPILOT_MODEL_ROUTING,
+        toolPolicyJson: INCIDENT_COPILOT_TOOL_POLICY,
+        connectorPolicyJson: connectorPolicy,
+        publishedAt: null,
+      })
+      .where(eq(agentVersions.id, draftVersion.id));
+  }
+
+  await params.db
+    .update(agents)
+    .set({ updatedAt: params.now })
+    .where(eq(agents.id, agentId));
 }
 
 async function main() {
@@ -251,7 +527,73 @@ async function main() {
     .onConflictDoNothing();
 
   // -----------------------------------------------------------------------
-  // 4. Idempotency check — skip Hartwell demo data if workers already exist
+  // 4. Public evaluator user
+  // -----------------------------------------------------------------------
+  const evaluatorEmail = (
+    process.env.SEED_EVALUATOR_EMAIL ?? "evaluator@hartwell.com"
+  ).toLowerCase();
+  const evaluatorDisplayName =
+    process.env.SEED_EVALUATOR_DISPLAY_NAME ?? "Demo Evaluator";
+  const evaluatorPassword =
+    process.env.SEED_EVALUATOR_PASSWORD ?? "publicdemo1";
+  const existingEvaluator = await db.query.users.findFirst({
+    where: eq(users.normalizedEmail, evaluatorEmail),
+  });
+
+  const evaluatorId = existingEvaluator?.id ?? `usr_${ulid()}`;
+
+  if (!existingEvaluator) {
+    await db.insert(users).values({
+      id: evaluatorId,
+      email: evaluatorEmail,
+      normalizedEmail: evaluatorEmail,
+      displayName: evaluatorDisplayName,
+      kind: "human",
+      status: "active",
+    });
+    console.log(`  Created user: ${evaluatorDisplayName} (${evaluatorId})`);
+  } else {
+    console.log(`  User already exists: ${evaluatorDisplayName} (${evaluatorId})`);
+  }
+
+  const evaluatorPasswordHash = await argon2.hash(evaluatorPassword, {
+    type: argon2.argon2id,
+  });
+  const existingEvaluatorIdentity = await db.query.identities.findFirst({
+    where: and(
+      eq(identities.userId, evaluatorId),
+      eq(identities.provider, "local-password"),
+    ),
+  });
+
+  if (!existingEvaluatorIdentity) {
+    await db.insert(identities).values({
+      id: `ident_${ulid()}`,
+      userId: evaluatorId,
+      provider: "local-password",
+      subject: evaluatorEmail,
+      passwordHash: evaluatorPasswordHash,
+      createdAt: now,
+      updatedAt: now,
+    });
+  } else {
+    await db
+      .update(identities)
+      .set({
+        subject: evaluatorEmail,
+        passwordHash: evaluatorPasswordHash,
+        updatedAt: now,
+      })
+      .where(eq(identities.id, existingEvaluatorIdentity.id));
+  }
+
+  await db
+    .insert(memberships)
+    .values({ workspaceId, userId: evaluatorId, role: "user" })
+    .onConflictDoNothing();
+
+  // -----------------------------------------------------------------------
+  // 5. Idempotency check — skip Hartwell demo data if workers already exist
   // -----------------------------------------------------------------------
   const existingWorkers = await db
     .select()
@@ -313,6 +655,13 @@ async function main() {
       || watchedInboxRoute?.status !== "suggested";
 
     if (looksComplete && !needsSeedUpgrade) {
+      await ensureIncidentCopilotDemo({
+        db,
+        databaseUrl,
+        workspaceId,
+        userId: daveId,
+        now,
+      });
       console.log(`  Hartwell demo data already seeded (${existingWorkers.length} workers found). Skipping.`);
       await pool.end();
       return;
@@ -436,7 +785,7 @@ async function main() {
   const SRC_EVT_DENIED = cid("sevt"); // Denied flow source event
 
   // -----------------------------------------------------------------------
-  // 5. Workers
+  // 6. Workers
   // -----------------------------------------------------------------------
   await db.insert(workers).values([
     {
@@ -1279,6 +1628,14 @@ async function main() {
     now,
   });
   console.log(`    queued initial connector sync job (${syncJobId})`);
+
+  await ensureIncidentCopilotDemo({
+    db,
+    databaseUrl,
+    workspaceId,
+    userId: daveId,
+    now,
+  });
 
   await db
     .update(workspaces)

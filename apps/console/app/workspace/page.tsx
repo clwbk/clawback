@@ -150,8 +150,8 @@ export default async function TodayPage() {
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {knowledgeReady
-                      ? "Company Docs is indexed and ready for no-Google retrieval proof."
-                      : "Open Knowledge and confirm the seeded Company Docs sync indexed real documents."}
+                      ? "A seeded knowledge source is indexed and ready for retrieval proof."
+                      : "Open Knowledge and confirm the seeded incident demo sync indexed real documents."}
                   </p>
                 </div>
                 <span className="text-sm font-medium text-primary">

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   listWorkspaceActionCapabilities,
@@ -73,12 +74,57 @@ export default async function WorkersPage() {
               </p>
               {usingFixtureFallback ? <Badge variant="outline">fixture fallback</Badge> : null}
             </div>
-            <h1 className="mt-1 text-2xl font-semibold text-foreground">Installed worker set</h1>
+            <h1 className="mt-1 text-2xl font-semibold text-foreground">Installed workers</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Shared roles, team access, input routes, connections, outputs, and actions.
+              Shared roles, team access, inputs, connected systems, outputs, and governed actions.
             </p>
           </div>
           <AddWorkerButton />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card className="border-sky-500/20 bg-sky-500/5">
+            <CardHeader className="pb-3">
+              <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                Worker-first path
+              </p>
+              <CardTitle className="text-base">Install a role, then bring it live</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Start from a worker template, not a blank chat. After install, Clawback opens that
+                worker&apos;s activation guide so you can assign people, confirm routes, and run
+                sample activity when the template supports it.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <AddWorkerButton />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                Retrieval-first path
+              </p>
+              <CardTitle className="text-base">Prefer a no-Google proof first?</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Open the seeded knowledge source, confirm it is indexed, then use Incident Copilot
+                in Chat. This is the clearest retrieval-backed evaluator path when you want value
+                before wiring live systems.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="outline">
+                  <Link href="/workspace/connectors">Open Knowledge</Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/workspace/chat">Open Chat</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="flex flex-wrap gap-2">

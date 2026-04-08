@@ -4,7 +4,9 @@ import {
   followUpActions,
   followUpConnections,
   followUpRoutes,
+  inboxItems,
   workers,
+  workItems,
 } from "@/lib/dev-fixtures";
 import type {
   ConnectorRecord,
@@ -56,20 +58,48 @@ describe("buildPilotSetupSteps", () => {
       connections: followUpConnections,
       inputRoutes: followUpRoutes,
       actionCapabilities: followUpActions,
+      inboxItems: [],
+      workItems: [],
       connectors: [docsConnector],
       syncJobsByConnector: new Map([[docsConnector.id, [docsSyncJob]]]),
     });
 
-    expect(steps.slice(0, 4).map((step) => step.id)).toEqual([
+    expect(steps.slice(0, 5).map((step) => step.id)).toEqual([
       "connector.local-directory:seeded-knowledge-ready",
       "worker-pack.follow-up:install-follow-up",
       "ingress.forward-email:forward-email-ready",
+      "demo.follow-up:run-sample-activity",
       "provider.smtp-relay:smtp-configure",
     ]);
     expect(steps[0]).toMatchObject({
       complete: true,
       href: "/workspace/connectors",
       ctaLabel: "Open Knowledge",
+    });
+    expect(steps[3]).toMatchObject({
+      complete: false,
+      href: "/workspace/workers/wkr_followup_01?focus=proof",
+      ctaLabel: "Run sample activity",
+    });
+  });
+
+  it("marks the demo activity step complete once a follow-up worker has real inbox or work state", () => {
+    const steps = buildPilotSetupSteps({
+      workers,
+      connections: followUpConnections,
+      inputRoutes: followUpRoutes,
+      actionCapabilities: followUpActions,
+      inboxItems,
+      workItems,
+      connectors: [],
+      syncJobsByConnector: new Map(),
+    });
+
+    expect(
+      steps.find((step) => step.id === "demo.follow-up:run-sample-activity"),
+    ).toMatchObject({
+      complete: true,
+      href: "/workspace/workers/wkr_followup_01?focus=proof",
     });
   });
 });

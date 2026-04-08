@@ -14,6 +14,8 @@ import { ReviewedSendRetryButton } from "../_components/reviewed-send-retry-butt
 type ReviewActionsProps = {
   reviewId: string;
   reviewStatus: string;
+  reviewerIds: string[];
+  assigneeIds: string[];
   workItemId?: string | null;
   executionStatus?: string | null;
   executionOutcome?: ReviewedSendExecutionRecord | null;
@@ -22,6 +24,8 @@ type ReviewActionsProps = {
 export function ReviewActions({
   reviewId,
   reviewStatus,
+  reviewerIds,
+  assigneeIds,
   workItemId,
   executionStatus,
   executionOutcome,
@@ -31,6 +35,14 @@ export function ReviewActions({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [resolvedStatus, setResolvedStatus] = useState<string | null>(null);
+  const canResolve = Boolean(
+    session
+      && (
+        session.membership.role === "admin"
+        || reviewerIds.includes(session.user.id)
+        || assigneeIds.includes(session.user.id)
+      ),
+  );
 
   // If the review was already resolved (from server data or after client action)
   const effectiveStatus = resolvedStatus ?? reviewStatus;
@@ -69,6 +81,15 @@ export function ReviewActions({
           />
         ) : null}
       </div>
+    );
+  }
+
+  if (!canResolve) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        You can inspect this pending review, but only an assigned reviewer or
+        workspace admin can resolve it.
+      </p>
     );
   }
 

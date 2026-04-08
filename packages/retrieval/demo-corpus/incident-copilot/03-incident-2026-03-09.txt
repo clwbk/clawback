@@ -1,0 +1,18 @@
+Incident Note: 2026-03-09 Checkout Failure
+
+Timeline:
+
+- 01:05 ET: payments-db primary failover started
+- 01:10 ET: checkout-api 5xx rate increased sharply
+- 01:14 ET: order-worker remained healthy
+- 01:19 ET: logs showed upstream connection failures from checkout-api
+- 01:32 ET: checkout-api roll restart completed
+- 01:36 ET: 5xx rate returned near baseline
+
+Customer impact:
+
+- checkout attempts intermittently failed for roughly 26 minutes
+
+Initial operator note:
+
+- likely related to stale database target after failover

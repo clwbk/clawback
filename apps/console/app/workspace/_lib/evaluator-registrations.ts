@@ -187,6 +187,31 @@ registerSetupEvaluator(
   },
 );
 
+// Demo proof: a follow-up worker has produced real inbox/work state
+registerSetupEvaluator(
+  "demo.follow-up",
+  "run-sample-activity",
+  (ctx) => {
+    const followUpWorkerIds = new Set(
+      ctx.workers
+        .filter((worker) => worker.kind === "follow_up")
+        .map((worker) => worker.id),
+    );
+    if (followUpWorkerIds.size === 0) {
+      return false;
+    }
+
+    return (
+      ctx.inboxItems.some(
+        (item) => item.worker_id !== null && followUpWorkerIds.has(item.worker_id),
+      ) ||
+      ctx.workItems.some(
+        (item) => item.worker_id !== null && followUpWorkerIds.has(item.worker_id),
+      )
+    );
+  },
+);
+
 // ---------------------------------------------------------------------------
 // Action executor evaluators
 // ---------------------------------------------------------------------------

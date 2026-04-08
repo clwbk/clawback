@@ -11,14 +11,22 @@ import { confirmWorkspaceRouteSuggestion } from "@/lib/control-plane";
 type RouteActionsProps = {
   inboxItemId: string;
   state: "open" | "resolved" | "dismissed";
+  assigneeIds: string[];
 };
 
-export function RouteActions({ inboxItemId, state }: RouteActionsProps) {
+export function RouteActions({ inboxItemId, state, assigneeIds }: RouteActionsProps) {
   const router = useRouter();
   const { session } = useSession();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(state === "resolved");
+  const canConfirm = Boolean(
+    session
+      && (
+        session.membership.role === "admin"
+        || assigneeIds.includes(session.user.id)
+      ),
+  );
 
   if (confirmed || state === "resolved") {
     return <Badge variant="secondary">Route confirmed</Badge>;
@@ -26,6 +34,15 @@ export function RouteActions({ inboxItemId, state }: RouteActionsProps) {
 
   if (state !== "open") {
     return <Badge variant="outline">Route unavailable</Badge>;
+  }
+
+  if (!canConfirm) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Route confirmation is limited to the assigned operator or a workspace
+        admin.
+      </p>
+    );
   }
 
   async function handleConfirm() {

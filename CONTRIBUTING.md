@@ -64,6 +64,19 @@ pnpm test:migration-proof
 pnpm test:deployed-stack
 ```
 
+You do not need to run every command for every change. For docs-only changes,
+the smallest relevant check is enough. For code, packaging, or deployment
+changes, prefer the higher-signal acceptance checks.
+
+The public repo keeps one lightweight CI gate for code changes:
+
+```bash
+pnpm test:deployed-stack
+```
+
+That keeps contribution rules simple while still checking the real public beta
+path.
+
 ## Contribution Rules
 
 - Keep docs practical and implementation-oriented.

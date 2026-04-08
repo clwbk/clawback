@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { type AuthenticatedSession } from "@/lib/control-plane";
 import { pathToWorkspaceSection, workspaceSectionToPath } from "@/lib/workspace-navigation";
 import { useApprovalSummary } from "@/hooks/use-approval-summary";
+import { useWorkspaceRail } from "@/hooks/use-workspace-rail";
 import { useSession } from "@/hooks/use-session";
 import { useSetupProgress } from "@/hooks/use-setup-progress";
 
@@ -26,6 +27,7 @@ export function WorkspaceShell({
   const role = session?.membership.role === "admin" ? "admin" : "user";
   const { pendingCount } = useApprovalSummary(role);
   const { incompleteCount: incompleteSetupSteps } = useSetupProgress(role);
+  const { railExpanded, toggleRail } = useWorkspaceRail();
 
   if (loading) {
     return (
@@ -88,6 +90,7 @@ export function WorkspaceShell({
 
   return (
     <AppShell
+      railExpanded={railExpanded}
       rail={
         <IconRail
           role={role}
@@ -95,6 +98,8 @@ export function WorkspaceShell({
           onNavigate={handleNavigate}
           pendingApprovals={pendingCount}
           incompleteSetupSteps={incompleteSetupSteps}
+          expanded={railExpanded}
+          onToggleExpanded={toggleRail}
         />
       }
       header={

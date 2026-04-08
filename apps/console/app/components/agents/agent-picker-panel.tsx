@@ -35,13 +35,14 @@ export function AgentPickerPanel({
   onNewThread,
 }: AgentPickerPanelProps) {
   const selectedAgent = agents.find((a) => a.id === selectedAgentId) ?? null;
+  const assistantHeading = agents.length === 1 ? "Assistant" : "Assistants";
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       {/* Assistant list */}
       <div className="px-3 pt-4 pb-2">
         <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/50">
-          Assistants
+          {assistantHeading}
         </p>
         <div className="flex flex-col gap-0.5">
           {agents.length === 0 && (

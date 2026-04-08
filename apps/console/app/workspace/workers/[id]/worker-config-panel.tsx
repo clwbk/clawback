@@ -378,7 +378,7 @@ export function WorkerConfigPanel({
       </Card>
 
       {/* People management */}
-      <Card>
+      <Card id="people-section">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">People</CardTitle>
@@ -421,7 +421,7 @@ export function WorkerConfigPanel({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="routes-section">
         <CardHeader>
           <CardTitle className="text-base">Inputs</CardTitle>
         </CardHeader>
@@ -458,7 +458,7 @@ export function WorkerConfigPanel({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="connections-section">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Connections</CardTitle>
@@ -530,7 +530,7 @@ export function WorkerConfigPanel({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="actions-section">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Actions</CardTitle>

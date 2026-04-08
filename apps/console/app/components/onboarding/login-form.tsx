@@ -12,6 +12,12 @@ export function LoginForm() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const demoGuideHref = process.env.NEXT_PUBLIC_PUBLIC_DEMO_MODE === "true"
+    ? "/docs/public-demo"
+    : "/docs/demo-walkthrough";
+  const demoGuideText = process.env.NEXT_PUBLIC_PUBLIC_DEMO_MODE === "true"
+    ? "for the public evaluator path and access details."
+    : "for the recommended path and demo guidance.";
 
   async function handleSubmit(formData: FormData) {
     setPending(true);
@@ -53,6 +59,16 @@ export function LoginForm() {
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Enter your credentials to access your workspace.
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Trying the shared demo?{" "}
+          <a
+            href={demoGuideHref}
+            className="font-medium text-foreground underline underline-offset-2"
+          >
+            Open the guide
+          </a>{" "}
+          {demoGuideText}
         </p>
       </div>
 

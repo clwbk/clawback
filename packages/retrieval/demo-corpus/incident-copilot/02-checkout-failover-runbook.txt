@@ -1,0 +1,17 @@
+Checkout Failover Runbook
+
+When checkout error rates spike after a database failover:
+
+1. Confirm whether payments-db promoted a new primary.
+2. Check whether checkout-api is still targeting the old primary host.
+3. Restart checkout-api if the service did not refresh the primary target.
+4. Confirm 5xx rate returns to baseline.
+5. Create a follow-up ticket if customer impact exceeded 15 minutes.
+
+Known failure pattern:
+
+- checkout-api may keep a stale primary target after failover if the service was already connected during promotion.
+
+Expected symptom:
+
+- elevated 502 or upstream connection failures on checkout-api

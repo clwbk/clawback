@@ -45,6 +45,59 @@ function uniqueRunIds(messages: ConversationDetail["messages"]) {
   return runIds;
 }
 
+function hasAssistantMessageForRun(
+  messages: ConversationDetail["messages"],
+  runId: string,
+) {
+  return messages.some(
+    (message) => message.role === "assistant" && message.run_id === runId,
+  );
+}
+
+function hasTerminalRunEvent(events: RunEventRecord[]) {
+  return events.some(
+    (event) =>
+      event.event_type === "run.completed" ||
+      event.event_type === "run.failed",
+  );
+}
+
+type ActiveRunSelectionParams = {
+  run: RunRecord;
+  detail: ConversationDetail;
+  events: RunEventRecord[];
+  hasAuthoritativeRunRecord: boolean;
+  hasAuthoritativeRunEvents: boolean;
+  allowStaleFallback: boolean;
+};
+
+export function shouldUseRunAsActiveStream({
+  run,
+  detail,
+  events,
+  hasAuthoritativeRunRecord,
+  hasAuthoritativeRunEvents,
+  allowStaleFallback,
+}: ActiveRunSelectionParams) {
+  if (run.status !== "queued" && run.status !== "running") {
+    return false;
+  }
+
+  if (hasAssistantMessageForRun(detail.messages, run.id)) {
+    return false;
+  }
+
+  if (hasTerminalRunEvent(events)) {
+    return false;
+  }
+
+  if (!allowStaleFallback && !hasAuthoritativeRunRecord && !hasAuthoritativeRunEvents) {
+    return false;
+  }
+
+  return true;
+}
+
 export interface ConversationsState {
   conversations: ConversationRecord[];
   selectedConversationId: string | null;
@@ -83,7 +136,10 @@ export interface ConversationHandlers {
   loadConversationState: (
     conversationId: string,
     preferredRunId?: string | null,
-    options?: { keepDrafts?: boolean },
+    options?: {
+      keepDrafts?: boolean;
+      allowStaleActiveRunFallback?: boolean;
+    },
   ) => Promise<void>;
 }
 
@@ -96,6 +152,11 @@ export function useConversations(
 ) {
   const conversationLoadTokenRef = useRef(0);
 
+  const cancelPendingConversationLoad = () => {
+    conversationLoadTokenRef.current += 1;
+    setLoadingConversationDetail(false);
+  };
+
   const [conversations, setConversations] = useState<ConversationRecord[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [conversationDetail, setConversationDetail] = useState<ConversationDetail | null>(null);
@@ -106,7 +167,21 @@ export function useConversations(
   const [runEventsById, setRunEventsById] = useState<Record<string, RunEventRecord[]>>({});
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [assistantDrafts, setAssistantDrafts] = useState<Record<string, string>>({});
-  const [streamTarget, setStreamTarget] = useState<StreamTarget | null>(null);
+  const [streamTargetState, setStreamTargetState] = useState<StreamTarget | null>(null);
+  const setStreamTarget = (target: StreamTarget | null) => {
+    setStreamTargetState((current) => {
+      if (!current && !target) return current;
+      if (
+        current &&
+        target &&
+        current.runId === target.runId &&
+        current.conversationId === target.conversationId
+      ) {
+        return current;
+      }
+      return target;
+    });
+  };
 
   const [composerText, setComposerText] = useState("");
   const [creatingConversation, setCreatingConversation] = useState(false);
@@ -115,40 +190,90 @@ export function useConversations(
   async function loadConversationState(
     conversationId: string,
     preferredRunId?: string | null,
-    options?: { keepDrafts?: boolean },
+    options?: {
+      keepDrafts?: boolean;
+      allowStaleActiveRunFallback?: boolean;
+    },
   ) {
     const requestId = ++conversationLoadTokenRef.current;
     setLoadingConversationDetail(true);
+    try {
+      const detail = await getConversation(conversationId);
+      if (conversationLoadTokenRef.current !== requestId) return;
 
-    const detail = await getConversation(conversationId);
-    const runIds = uniqueRunIds(detail.messages);
-    const runBundles = await Promise.all(
-      runIds.map(async (runId) => {
-        const [record, events] = await Promise.all([getRun(runId), getRunEvents(runId)]);
-        return { record, events: events.events };
-      }),
-    );
+      // Persisted transcript data is the primary UX path. Show it immediately,
+      // then hydrate per-run metadata as a best-effort follow-up.
+      setConversationDetail(detail);
+      if (!options?.keepDrafts) setAssistantDrafts({});
+      setLoadingConversationDetail(false);
 
-    const nextRunsById = Object.fromEntries(runBundles.map((bundle) => [bundle.record.id, bundle.record]));
-    const nextEventsById = Object.fromEntries(runBundles.map((bundle) => [bundle.record.id, bundle.events]));
-    const sortedRuns = sortRuns(runBundles.map((bundle) => bundle.record));
-    const activeRun = sortedRuns.find((run) => run.status === "queued" || run.status === "running") ?? null;
-    const nextSelectedRunId =
-      preferredRunId && nextRunsById[preferredRunId]
-        ? preferredRunId
-        : selectedRunId && nextRunsById[selectedRunId]
-          ? selectedRunId
-          : sortedRuns[0]?.id ?? null;
+      const runIds = uniqueRunIds(detail.messages);
+      const settledRunBundles = await Promise.allSettled(
+        runIds.map(async (runId) => {
+          const [record, events] = await Promise.all([getRun(runId), getRunEvents(runId)]);
+          return { record, events: events.events };
+        }),
+      );
 
-    if (conversationLoadTokenRef.current !== requestId) return;
+      const successfulRunBundles = settledRunBundles.flatMap((bundle) =>
+        bundle.status === "fulfilled" ? [bundle.value] : [],
+      );
+      const successfulRunsById = new Map(
+        successfulRunBundles.map((bundle) => [bundle.record.id, bundle.record]),
+      );
+      const successfulEventsById = new Map(
+        successfulRunBundles.map((bundle) => [bundle.record.id, bundle.events]),
+      );
+      const allowStaleActiveRunFallback =
+        options?.allowStaleActiveRunFallback ?? true;
+      const nextRunsById = Object.fromEntries(
+        runIds.flatMap((runId) => {
+          const record = successfulRunsById.get(runId) ?? runsById[runId];
+          return record ? [[runId, record]] : [];
+        }),
+      );
+      const nextEventsById = Object.fromEntries(
+        runIds.flatMap((runId) => {
+          const events = successfulEventsById.get(runId) ?? runEventsById[runId];
+          return events ? [[runId, events]] : [];
+        }),
+      );
+      const sortedRuns = sortRuns(
+        runIds.flatMap((runId) => {
+          const run = nextRunsById[runId];
+          return run ? [run] : [];
+        }),
+      );
+      const activeRun =
+        sortedRuns.find((run) => {
+          return shouldUseRunAsActiveStream({
+            run,
+            detail,
+            events: nextEventsById[run.id] ?? [],
+            hasAuthoritativeRunRecord: successfulRunsById.has(run.id),
+            hasAuthoritativeRunEvents: successfulEventsById.has(run.id),
+            allowStaleFallback: allowStaleActiveRunFallback,
+          });
+        }) ?? null;
+      const nextSelectedRunId =
+        preferredRunId && nextRunsById[preferredRunId]
+          ? preferredRunId
+          : selectedRunId && nextRunsById[selectedRunId]
+            ? selectedRunId
+            : sortedRuns[0]?.id ?? null;
 
-    setConversationDetail(detail);
-    setRunsById(nextRunsById);
-    setRunEventsById(nextEventsById);
-    setSelectedRunId(nextSelectedRunId);
-    setStreamTarget(activeRun ? { runId: activeRun.id, conversationId } : null);
-    if (!options?.keepDrafts) setAssistantDrafts({});
-    setLoadingConversationDetail(false);
+      if (conversationLoadTokenRef.current !== requestId) return;
+
+      setRunsById(nextRunsById);
+      setRunEventsById(nextEventsById);
+      setSelectedRunId(nextSelectedRunId);
+      setStreamTarget(activeRun ? { runId: activeRun.id, conversationId } : null);
+    } catch (error) {
+      if (conversationLoadTokenRef.current === requestId) {
+        setLoadingConversationDetail(false);
+      }
+      throw error;
+    }
   }
 
   // Fetch conversations when selected agent changes
@@ -301,6 +426,11 @@ export function useConversations(
           csrfToken: sess.csrf_token,
         });
 
+        // A just-created thread may still be loading its empty initial state.
+        // Once a run is queued, that stale response must not clear the optimistic
+        // run record or detach the live stream before persisted messages arrive.
+        cancelPendingConversationLoad();
+
         setConversationDetail((current) => {
           if (!current) return current;
           const nextSequence = current.messages.length;
@@ -379,7 +509,7 @@ export function useConversations(
     runEventsById,
     selectedRunId,
     assistantDrafts,
-    streamTarget,
+    streamTarget: streamTargetState,
     loadingConversations,
     loadingConversationDetail,
     creatingConversation,

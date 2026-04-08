@@ -8,7 +8,7 @@
 #
 # Prerequisites:
 #   - Docker (with Compose v2) installed and the daemon running
-#   - Ports 3000, 3001, 5432, 9000, 9001, 18789, 18790 available
+#   - Ports 3000, 3001, 80, and 443 available
 #
 # Usage:
 #   ./scripts/test-deployed-stack.sh
@@ -33,7 +33,7 @@
 #
 # Assumptions:
 #   - The host has enough resources to build all images (~4 GB RAM, ~8 GB disk)
-#   - No other process is bound to the ports listed above
+#   - No other process is bound to the fixed host ports above
 #   - The openclaw container image pulls successfully (network access)
 #
 # Risks:
@@ -69,6 +69,27 @@ TMPENV=$(mktemp "${TMPDIR:-/tmp}/clawback-test-env.XXXXXX")
 
 random_secret() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 || true; }
 
+pick_free_ports() {
+  python3 - "$1" <<'PY'
+import socket
+import sys
+
+count = int(sys.argv[1])
+sockets = []
+
+try:
+    for _ in range(count):
+        sock = socket.socket()
+        sock.bind(("127.0.0.1", 0))
+        sockets.append(sock)
+    for sock in sockets:
+        print(sock.getsockname()[1])
+finally:
+    for sock in sockets:
+        sock.close()
+PY
+}
+
 POSTGRES_PASSWORD="$(random_secret)"
 MINIO_ROOT_PASSWORD="$(random_secret)"
 OPENCLAW_GATEWAY_TOKEN="$(random_secret)"
@@ -77,21 +98,30 @@ CLAWBACK_RUNTIME_API_TOKEN="$(random_secret)"
 CLAWBACK_APPROVAL_SURFACE_SECRET="$(random_secret)"
 CLAWBACK_INBOUND_EMAIL_WEBHOOK_TOKEN="$(random_secret)"
 CLAWBACK_GMAIL_WATCH_HOOK_TOKEN="$(random_secret)"
+mapfile -t FREE_PORTS < <(pick_free_ports 5)
+# Keep the acceptance harness isolated from ambient dev-shell exports such as
+# OPENCLAW_GATEWAY_PORT from start-local.sh. Allow explicit overrides only via
+# TEST_DEPLOYED_STACK_* variables.
+POSTGRES_PORT="${TEST_DEPLOYED_STACK_POSTGRES_PORT:-${FREE_PORTS[0]}}"
+MINIO_API_PORT="${TEST_DEPLOYED_STACK_MINIO_API_PORT:-${FREE_PORTS[1]}}"
+MINIO_CONSOLE_PORT="${TEST_DEPLOYED_STACK_MINIO_CONSOLE_PORT:-${FREE_PORTS[2]}}"
+OPENCLAW_GATEWAY_PORT="${TEST_DEPLOYED_STACK_OPENCLAW_GATEWAY_PORT:-${FREE_PORTS[3]}}"
+OPENCLAW_BRIDGE_PORT="${TEST_DEPLOYED_STACK_OPENCLAW_BRIDGE_PORT:-${FREE_PORTS[4]}}"
 
 cat > "$TMPENV" <<ENVEOF
 POSTGRES_DB=clawback
 POSTGRES_USER=clawback
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-POSTGRES_PORT=5432
+POSTGRES_PORT=${POSTGRES_PORT}
 
 MINIO_ROOT_USER=minio
 MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
-MINIO_API_PORT=9000
-MINIO_CONSOLE_PORT=9001
+MINIO_API_PORT=${MINIO_API_PORT}
+MINIO_CONSOLE_PORT=${MINIO_CONSOLE_PORT}
 
 OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
-OPENCLAW_GATEWAY_PORT=18789
-OPENCLAW_BRIDGE_PORT=18790
+OPENCLAW_GATEWAY_PORT=${OPENCLAW_GATEWAY_PORT}
+OPENCLAW_BRIDGE_PORT=${OPENCLAW_BRIDGE_PORT}
 
 CONTROL_PLANE_PORT=3001
 COOKIE_SECRET=${COOKIE_SECRET}
@@ -107,6 +137,7 @@ CLAWBACK_DOMAIN=localhost
 ENVEOF
 
 echo -e "${BLUE}Generated temp .env at ${TMPENV}${NC}"
+echo -e "${BLUE}Using temp service ports postgres=${POSTGRES_PORT} minio=${MINIO_API_PORT}/${MINIO_CONSOLE_PORT} openclaw=${OPENCLAW_GATEWAY_PORT}/${OPENCLAW_BRIDGE_PORT}${NC}"
 
 # ---- Compose project name (avoid clashing with other runs) ----
 PROJECT_NAME="clawback-test-$$"

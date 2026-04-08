@@ -11,7 +11,7 @@ import { expect, test, type Page } from "@playwright/test";
  * 5. See the seeded "Company Docs" connector with a non-zero sync status
  *
  * Assumptions:
- * - The stack is running (console on :3000, control-plane on :3001)
+ * - The stack is running (console on :3000, control-plane proxied behind it)
  * - The database has been seeded (dave@hartwell.com / demo1234 exists)
  * - The Company Docs connector has been seeded and synced at least once
  */
@@ -57,7 +57,7 @@ test("no-google first-run: login, discover knowledge path, see seeded connector"
   ).toBeVisible();
 
   // 6. Verify the seeded "Company Docs" connector is visible
-  await expect(page.getByText("Company Docs")).toBeVisible();
+  await expect(page.getByText("Company Docs", { exact: true })).toBeVisible();
 
   // 7. Verify sync status shows indexed documents (not zero)
   //    The sync stats render as "<N> indexed" where N > 0

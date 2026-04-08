@@ -40,6 +40,7 @@ import {
   resolveApprovalRequestSchema,
   ticketListResponseSchema,
   runtimeControlStatusResponseSchema,
+  runtimeReadinessResponseSchema,
   runtimeRestartResponseSchema,
   runEventListResponseSchema,
   setupStatusResponseSchema,
@@ -63,7 +64,7 @@ import type {
   WorkerPackListResponse,
   WorkerPackInstallResult,
 } from "@clawback/contracts";
-import type { z } from "zod";
+import { z } from "zod";
 
 type Schema<T> = {
   parse(value: unknown): T;
@@ -80,34 +81,89 @@ export class ControlPlaneRequestError extends Error {
   }
 }
 
-export type AuthenticatedSession = z.infer<typeof authenticatedSessionResponseSchema>;
+export type AuthenticatedSession = z.infer<
+  typeof authenticatedSessionResponseSchema
+>;
 export type TodayResponse = z.infer<typeof todayResponseSchema>;
-export type WorkspaceWorkerListResponse = z.infer<typeof workerListResponseSchema>;
-export type WorkspaceWorkerRecord = WorkspaceWorkerListResponse["workers"][number];
-export type WorkspaceWorkerDetail = z.infer<typeof getWorkspaceWorkerResponseSchema>;
-export type WorkspaceWorkItemListResponse = z.infer<typeof workItemListResponseSchema>;
-export type WorkspaceWorkItemRecord = WorkspaceWorkItemListResponse["work_items"][number];
-export type WorkspaceWorkItemDetail = z.infer<typeof getWorkspaceWorkItemResponseSchema>;
-export type WorkspaceInboxListResponse = z.infer<typeof inboxListResponseSchema>;
-export type WorkspaceInboxItemRecord = WorkspaceInboxListResponse["items"][number];
-export type WorkspaceConnectionListResponse = z.infer<typeof workspaceConnectionListResponseSchema>;
-export type WorkspaceConnectionRecord = WorkspaceConnectionListResponse["connections"][number];
-export type WorkspaceConnectionDetail = z.infer<typeof getWorkspaceConnectionResponseSchema>;
-export type WorkspaceActivityListResponse = z.infer<typeof activityListResponseSchema>;
-export type WorkspaceActivityRecord = WorkspaceActivityListResponse["events"][number];
-export type WorkspaceReviewDetail = z.infer<typeof getWorkspaceReviewResponseSchema>;
-export type WorkspaceInputRouteListResponse = z.infer<typeof inputRouteListResponseSchema>;
-export type WorkspaceInputRouteRecord = WorkspaceInputRouteListResponse["input_routes"][number];
-export type WorkspaceActionCapabilityListResponse = z.infer<typeof actionCapabilityListResponseSchema>;
+export type WorkspaceWorkerListResponse = z.infer<
+  typeof workerListResponseSchema
+>;
+export type WorkspaceWorkerRecord =
+  WorkspaceWorkerListResponse["workers"][number];
+export type WorkspaceWorkerDetail = z.infer<
+  typeof getWorkspaceWorkerResponseSchema
+>;
+const workerDemoForwardEmailResponseSchema = z.object({
+  scenario: z.literal("forward_email_sample"),
+  worker_id: z.string().min(1),
+  route_id: z.string().min(1),
+  subject: z.string().min(1),
+  deduplicated: z.boolean(),
+  source_event_id: z.string().min(1),
+  work_item_id: z.string().min(1),
+  inbox_item_id: z.string().min(1),
+  review_id: z.string().min(1),
+});
+export type WorkerDemoForwardEmailResult = z.infer<
+  typeof workerDemoForwardEmailResponseSchema
+>;
+export type WorkspaceWorkItemListResponse = z.infer<
+  typeof workItemListResponseSchema
+>;
+export type WorkspaceWorkItemRecord =
+  WorkspaceWorkItemListResponse["work_items"][number];
+export type WorkspaceWorkItemDetail = z.infer<
+  typeof getWorkspaceWorkItemResponseSchema
+>;
+export type WorkspaceInboxListResponse = z.infer<
+  typeof inboxListResponseSchema
+>;
+export type WorkspaceInboxItemRecord =
+  WorkspaceInboxListResponse["items"][number];
+export type WorkspaceConnectionListResponse = z.infer<
+  typeof workspaceConnectionListResponseSchema
+>;
+export type WorkspaceConnectionRecord =
+  WorkspaceConnectionListResponse["connections"][number];
+export type WorkspaceConnectionDetail = z.infer<
+  typeof getWorkspaceConnectionResponseSchema
+>;
+export type WorkspaceActivityListResponse = z.infer<
+  typeof activityListResponseSchema
+>;
+export type WorkspaceActivityRecord =
+  WorkspaceActivityListResponse["events"][number];
+export type WorkspaceReviewDetail = z.infer<
+  typeof getWorkspaceReviewResponseSchema
+>;
+export type WorkspaceInputRouteListResponse = z.infer<
+  typeof inputRouteListResponseSchema
+>;
+export type WorkspaceInputRouteRecord =
+  WorkspaceInputRouteListResponse["input_routes"][number];
+export type WorkspaceActionCapabilityListResponse = z.infer<
+  typeof actionCapabilityListResponseSchema
+>;
 export type WorkspaceActionCapabilityRecord =
   WorkspaceActionCapabilityListResponse["action_capabilities"][number];
-export type WorkspacePeopleListResponse = z.infer<typeof workspacePeopleListResponseSchema>;
-export type WorkspacePersonRecord = WorkspacePeopleListResponse["people"][number];
-export type ApprovalSurfaceIdentityListResponse = z.infer<typeof approvalSurfaceIdentityListResponseSchema>;
-export type ApprovalSurfaceIdentityRecord = z.infer<typeof approvalSurfaceIdentityRecordSchema>;
-export type GmailPilotSetupResponse = z.infer<typeof gmailPilotSetupResponseSchema>;
+export type WorkspacePeopleListResponse = z.infer<
+  typeof workspacePeopleListResponseSchema
+>;
+export type WorkspacePersonRecord =
+  WorkspacePeopleListResponse["people"][number];
+export type ApprovalSurfaceIdentityListResponse = z.infer<
+  typeof approvalSurfaceIdentityListResponseSchema
+>;
+export type ApprovalSurfaceIdentityRecord = z.infer<
+  typeof approvalSurfaceIdentityRecordSchema
+>;
+export type GmailPilotSetupResponse = z.infer<
+  typeof gmailPilotSetupResponseSchema
+>;
 export type GmailPilotSetupSummary = GmailPilotSetupResponse["setup"];
-export type GmailPilotPollResponse = z.infer<typeof gmailPilotPollResponseSchema>;
+export type GmailPilotPollResponse = z.infer<
+  typeof gmailPilotPollResponseSchema
+>;
 export type GmailPilotPollResult = GmailPilotPollResponse["poll"];
 export type GmailPilotScopeKind = z.infer<typeof gmailPilotScopeKindSchema>;
 export type SetupStatus = z.infer<typeof setupStatusResponseSchema>;
@@ -116,10 +172,17 @@ export type AgentRecord = AgentListResponse["agents"][number];
 export type AgentDetail = z.infer<typeof getAgentResponseSchema>;
 export type AgentDraftDetail = z.infer<typeof getAgentDraftResponseSchema>;
 export type PublishAgentResult = z.infer<typeof publishAgentResponseSchema>;
-export type ConversationListResponse = z.infer<typeof conversationListResponseSchema>;
-export type ConversationRecord = ConversationListResponse["conversations"][number];
-export type ConversationDetail = z.infer<typeof conversationDetailResponseSchema>;
-export type RetrievalCitation = NonNullable<ConversationDetail["messages"][number]["citations"]>[number];
+export type ConversationListResponse = z.infer<
+  typeof conversationListResponseSchema
+>;
+export type ConversationRecord =
+  ConversationListResponse["conversations"][number];
+export type ConversationDetail = z.infer<
+  typeof conversationDetailResponseSchema
+>;
+export type RetrievalCitation = NonNullable<
+  ConversationDetail["messages"][number]["citations"]
+>[number];
 export type RunRecord = z.infer<typeof getRunResponseSchema>;
 export type RunEventListResponse = z.infer<typeof runEventListResponseSchema>;
 export type RunEventRecord = RunEventListResponse["events"][number];
@@ -130,8 +193,11 @@ export type ApprovalDetail = z.infer<typeof getApprovalResponseSchema>;
 export type ApprovalDecisionRecord = ApprovalDetail["decisions"][number];
 export type ConnectorListResponse = z.infer<typeof connectorListResponseSchema>;
 export type ConnectorRecord = ConnectorListResponse["connectors"][number];
-export type ConnectorSyncJobListResponse = z.infer<typeof connectorSyncJobListResponseSchema>;
-export type ConnectorSyncJobRecord = ConnectorSyncJobListResponse["sync_jobs"][number];
+export type ConnectorSyncJobListResponse = z.infer<
+  typeof connectorSyncJobListResponseSchema
+>;
+export type ConnectorSyncJobRecord =
+  ConnectorSyncJobListResponse["sync_jobs"][number];
 export type ArtifactListResponse = z.infer<typeof artifactListResponseSchema>;
 export type ArtifactRecord = ArtifactListResponse["artifacts"][number];
 export type ArtifactDetail = z.infer<typeof getArtifactResponseSchema>;
@@ -140,13 +206,17 @@ export type ActionRecord = ActionListResponse["actions"][number];
 export type ActionDetail = z.infer<typeof getActionResponseSchema>;
 export type TicketListResponse = z.infer<typeof ticketListResponseSchema>;
 export type TicketRecord = TicketListResponse["tickets"][number];
-export type RuntimeControlStatus = z.infer<typeof runtimeControlStatusResponseSchema>;
+export type RuntimeControlStatus = z.infer<
+  typeof runtimeControlStatusResponseSchema
+>;
 export type RuntimeRestartResult = z.infer<typeof runtimeRestartResponseSchema>;
 export type ContactListResponse = z.infer<typeof contactListResponseSchema>;
 export type ContactRecord = z.infer<typeof contactRecordSchema>;
 export type AccountListResponse = z.infer<typeof accountListResponseSchema>;
 export type AccountRecord = z.infer<typeof accountRecordSchema>;
-export type ConfirmRouteSuggestionResponse = z.infer<typeof confirmRouteSuggestionResponseSchema>;
+export type ConfirmRouteSuggestionResponse = z.infer<
+  typeof confirmRouteSuggestionResponseSchema
+>;
 
 export function getControlPlaneUrl(path: string) {
   // Server components need an absolute URL because there's no browser origin.
@@ -199,7 +269,10 @@ async function requestJson<T>(
       // Dynamic import to avoid bundling next/headers in client code.
       const { cookies } = await import("next/headers");
       const cookieStore = await cookies();
-      const cookieHeader = cookieStore.getAll().map((c) => `${c.name}=${c.value}`).join("; ");
+      const cookieHeader = cookieStore
+        .getAll()
+        .map((c) => `${c.name}=${c.value}`)
+        .join("; ");
       if (cookieHeader) {
         headers.set("cookie", cookieHeader);
       }
@@ -258,7 +331,10 @@ export async function getSetupStatus() {
 }
 
 export async function getSession() {
-  return await requestJson("/api/auth/session", authenticatedSessionResponseSchema);
+  return await requestJson(
+    "/api/auth/session",
+    authenticatedSessionResponseSchema,
+  );
 }
 
 export async function logout(csrfToken: string) {
@@ -299,15 +375,22 @@ export async function updateAgent(input: {
     status?: "active" | "archived";
   };
 }) {
-  return await requestJson(`/api/agents/${input.agentId}`, getAgentResponseSchema, {
-    method: "PATCH",
-    csrfToken: input.csrfToken,
-    body: input.body,
-  });
+  return await requestJson(
+    `/api/agents/${input.agentId}`,
+    getAgentResponseSchema,
+    {
+      method: "PATCH",
+      csrfToken: input.csrfToken,
+      body: input.body,
+    },
+  );
 }
 
 export async function getAgentDraft(agentId: string) {
-  return await requestJson(`/api/agents/${agentId}/draft`, getAgentDraftResponseSchema);
+  return await requestJson(
+    `/api/agents/${agentId}/draft`,
+    getAgentDraftResponseSchema,
+  );
 }
 
 export async function updateAgentDraft(input: {
@@ -336,11 +419,15 @@ export async function updateAgentDraft(input: {
     };
   };
 }) {
-  return await requestJson(`/api/agents/${input.agentId}/draft`, getAgentDraftResponseSchema, {
-    method: "PATCH",
-    csrfToken: input.csrfToken,
-    body: input.body,
-  });
+  return await requestJson(
+    `/api/agents/${input.agentId}/draft`,
+    getAgentDraftResponseSchema,
+    {
+      method: "PATCH",
+      csrfToken: input.csrfToken,
+      body: input.body,
+    },
+  );
 }
 
 export async function publishAgent(input: {
@@ -348,35 +435,49 @@ export async function publishAgent(input: {
   expectedDraftVersionId: string;
   csrfToken: string;
 }) {
-  return await requestJson(`/api/agents/${input.agentId}/publish`, publishAgentResponseSchema, {
-    method: "POST",
-    csrfToken: input.csrfToken,
-    body: {
-      expected_draft_version_id: input.expectedDraftVersionId,
+  return await requestJson(
+    `/api/agents/${input.agentId}/publish`,
+    publishAgentResponseSchema,
+    {
+      method: "POST",
+      csrfToken: input.csrfToken,
+      body: {
+        expected_draft_version_id: input.expectedDraftVersionId,
+      },
     },
-  });
+  );
 }
 
 export async function listConversations(agentId?: string) {
   const query = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : "";
-  return await requestJson(`/api/conversations${query}`, conversationListResponseSchema);
+  return await requestJson(
+    `/api/conversations${query}`,
+    conversationListResponseSchema,
+  );
 }
 
 export async function createConversation(input: {
   agentId: string;
   csrfToken: string;
 }) {
-  return await requestJson("/api/conversations", createConversationResponseSchema, {
-    method: "POST",
-    csrfToken: input.csrfToken,
-    body: {
-      agent_id: input.agentId,
+  return await requestJson(
+    "/api/conversations",
+    createConversationResponseSchema,
+    {
+      method: "POST",
+      csrfToken: input.csrfToken,
+      body: {
+        agent_id: input.agentId,
+      },
     },
-  });
+  );
 }
 
 export async function getConversation(conversationId: string) {
-  return await requestJson(`/api/conversations/${conversationId}`, conversationDetailResponseSchema);
+  return await requestJson(
+    `/api/conversations/${conversationId}`,
+    conversationDetailResponseSchema,
+  );
 }
 
 export async function createRun(input: {
@@ -406,7 +507,10 @@ export async function listApprovals() {
 }
 
 export async function getApproval(approvalId: string) {
-  return await requestJson(`/api/approvals/${approvalId}`, getApprovalResponseSchema);
+  return await requestJson(
+    `/api/approvals/${approvalId}`,
+    getApprovalResponseSchema,
+  );
 }
 
 export async function resolveApproval(input: {
@@ -415,14 +519,18 @@ export async function resolveApproval(input: {
   rationale?: string | null;
   csrfToken: string;
 }) {
-  return await requestJson(`/api/approvals/${input.approvalId}/resolve`, getApprovalResponseSchema, {
-    method: "POST",
-    csrfToken: input.csrfToken,
-    body: resolveApprovalRequestSchema.parse({
-      decision: input.decision,
-      rationale: input.rationale ?? null,
-    }),
-  });
+  return await requestJson(
+    `/api/approvals/${input.approvalId}/resolve`,
+    getApprovalResponseSchema,
+    {
+      method: "POST",
+      csrfToken: input.csrfToken,
+      body: resolveApprovalRequestSchema.parse({
+        decision: input.decision,
+        rationale: input.rationale ?? null,
+      }),
+    },
+  );
 }
 
 export async function listMockTickets() {
@@ -434,7 +542,10 @@ export async function listArtifacts() {
 }
 
 export async function getArtifact(artifactId: string) {
-  return await requestJson(`/api/artifacts/${artifactId}`, getArtifactResponseSchema);
+  return await requestJson(
+    `/api/artifacts/${artifactId}`,
+    getArtifactResponseSchema,
+  );
 }
 
 export async function listActions() {
@@ -463,7 +574,17 @@ export async function createConnector(input: {
       config: {
         root_path: input.rootPath,
         recursive: true,
-        include_extensions: [".md", ".mdx", ".txt", ".text", ".json", ".yaml", ".yml", ".csv", ".html"],
+        include_extensions: [
+          ".md",
+          ".mdx",
+          ".txt",
+          ".text",
+          ".json",
+          ".yaml",
+          ".yml",
+          ".csv",
+          ".html",
+        ],
       },
     },
   });
@@ -491,33 +612,53 @@ export async function requestConnectorSync(input: {
 }
 
 export async function getRuntimeControlStatus() {
-  return await requestJson("/api/admin/runtime-control", runtimeControlStatusResponseSchema);
+  return await requestJson(
+    "/api/admin/runtime-control",
+    runtimeControlStatusResponseSchema,
+  );
 }
 
-export async function restartOpenClawRuntime(input: {
-  csrfToken: string;
-}) {
-  return await requestJson("/api/admin/runtime-control/restart", runtimeRestartResponseSchema, {
-    method: "POST",
-    csrfToken: input.csrfToken,
-  });
+export async function getRuntimeReadinessStatus() {
+  return await requestJson(
+    "/api/admin/runtime-readiness",
+    runtimeReadinessResponseSchema,
+  );
+}
+
+export async function restartOpenClawRuntime(input: { csrfToken: string }) {
+  return await requestJson(
+    "/api/admin/runtime-control/restart",
+    runtimeRestartResponseSchema,
+    {
+      method: "POST",
+      csrfToken: input.csrfToken,
+    },
+  );
 }
 
 export async function getRuntimeWorkerControlStatus() {
-  return await requestJson("/api/admin/runtime-control/worker", runtimeControlStatusResponseSchema);
+  return await requestJson(
+    "/api/admin/runtime-control/worker",
+    runtimeControlStatusResponseSchema,
+  );
 }
 
-export async function restartRuntimeWorker(input: {
-  csrfToken: string;
-}) {
-  return await requestJson("/api/admin/runtime-control/worker/restart", runtimeRestartResponseSchema, {
-    method: "POST",
-    csrfToken: input.csrfToken,
-  });
+export async function restartRuntimeWorker(input: { csrfToken: string }) {
+  return await requestJson(
+    "/api/admin/runtime-control/worker/restart",
+    runtimeRestartResponseSchema,
+    {
+      method: "POST",
+      csrfToken: input.csrfToken,
+    },
+  );
 }
 
 export async function getRunEvents(runId: string) {
-  return await requestJson(`/api/runs/${runId}/events`, runEventListResponseSchema);
+  return await requestJson(
+    `/api/runs/${runId}/events`,
+    runEventListResponseSchema,
+  );
 }
 
 export async function getWorkspaceToday() {
@@ -529,10 +670,29 @@ export async function listWorkspaceWorkers() {
 }
 
 export async function getWorkspaceWorker(workerId: string) {
-  return await requestJson(`/api/workspace/workers/${workerId}`, getWorkspaceWorkerResponseSchema);
+  return await requestJson(
+    `/api/workspace/workers/${workerId}`,
+    getWorkspaceWorkerResponseSchema,
+  );
 }
 
-export async function listWorkspaceInbox(input?: { assigneeId?: string | null }) {
+export async function runWorkerDemoForwardEmail(input: {
+  workerId: string;
+  csrfToken: string | null;
+}) {
+  return await requestJson(
+    `/api/workspace/workers/${input.workerId}/demo/forward-email`,
+    workerDemoForwardEmailResponseSchema,
+    {
+      method: "POST",
+      csrfToken: input.csrfToken,
+    },
+  );
+}
+
+export async function listWorkspaceInbox(input?: {
+  assigneeId?: string | null;
+}) {
   const params = new URLSearchParams();
   if (input?.assigneeId) {
     params.set("assignee", input.assigneeId);
@@ -559,11 +719,17 @@ export async function listWorkspaceWork(input?: {
 }
 
 export async function getWorkspaceWorkItem(workItemId: string) {
-  return await requestJson(`/api/workspace/work/${workItemId}`, getWorkspaceWorkItemResponseSchema);
+  return await requestJson(
+    `/api/workspace/work/${workItemId}`,
+    getWorkspaceWorkItemResponseSchema,
+  );
 }
 
 export async function listWorkspaceConnections() {
-  return await requestJson("/api/workspace/connections", workspaceConnectionListResponseSchema);
+  return await requestJson(
+    "/api/workspace/connections",
+    workspaceConnectionListResponseSchema,
+  );
 }
 
 export async function bootstrapWorkspaceConnection(input: {
@@ -585,9 +751,12 @@ export async function bootstrapWorkspaceConnection(input: {
   );
 }
 
-export async function connectWorkspaceConnection(connectionId: string, input: {
-  csrfToken?: string | null;
-}) {
+export async function connectWorkspaceConnection(
+  connectionId: string,
+  input: {
+    csrfToken?: string | null;
+  },
+) {
   return await requestJson(
     `/api/workspace/connections/${connectionId}/connect`,
     getWorkspaceConnectionResponseSchema,
@@ -598,9 +767,12 @@ export async function connectWorkspaceConnection(connectionId: string, input: {
   );
 }
 
-export async function disconnectWorkspaceConnection(connectionId: string, input: {
-  csrfToken?: string | null;
-}) {
+export async function disconnectWorkspaceConnection(
+  connectionId: string,
+  input: {
+    csrfToken?: string | null;
+  },
+) {
   return await requestJson(
     `/api/workspace/connections/${connectionId}/disconnect`,
     getWorkspaceConnectionResponseSchema,
@@ -739,9 +911,12 @@ export async function getSmtpStatus(connectionId: string) {
   );
 }
 
-export async function configureSmtp(connectionId: string, input: {
-  csrfToken?: string | null;
-}) {
+export async function configureSmtp(
+  connectionId: string,
+  input: {
+    csrfToken?: string | null;
+  },
+) {
   return await requestJson(
     `/api/workspace/connections/${connectionId}/smtp-configure`,
     getWorkspaceConnectionResponseSchema,
@@ -776,12 +951,15 @@ export async function getN8nStatus(connectionId: string) {
   );
 }
 
-export async function configureN8n(connectionId: string, input: {
-  baseUrl: string;
-  authToken: string;
-  webhookPathPrefix?: string | undefined;
-  csrfToken?: string | null | undefined;
-}) {
+export async function configureN8n(
+  connectionId: string,
+  input: {
+    baseUrl: string;
+    authToken: string;
+    webhookPathPrefix?: string | undefined;
+    csrfToken?: string | null | undefined;
+  },
+) {
   return await requestJson(
     `/api/workspace/connections/${connectionId}/n8n-configure`,
     getWorkspaceConnectionResponseSchema,
@@ -791,7 +969,9 @@ export async function configureN8n(connectionId: string, input: {
       body: {
         base_url: input.baseUrl,
         auth_token: input.authToken,
-        ...(input.webhookPathPrefix ? { webhook_path_prefix: input.webhookPathPrefix } : {}),
+        ...(input.webhookPathPrefix
+          ? { webhook_path_prefix: input.webhookPathPrefix }
+          : {}),
       },
     },
   );
@@ -808,9 +988,12 @@ const n8nVerifySchema = {
   parse: (v: unknown) => v as N8nVerifyResponse,
 };
 
-export async function verifyN8n(connectionId: string, input: {
-  csrfToken?: string | null | undefined;
-}) {
+export async function verifyN8n(
+  connectionId: string,
+  input: {
+    csrfToken?: string | null | undefined;
+  },
+) {
   return await requestJson(
     `/api/workspace/connections/${connectionId}/n8n-verify`,
     n8nVerifySchema,
@@ -938,12 +1121,26 @@ export async function completeDriveOAuthCallback(input: {
   );
 }
 
-export async function probeDriveConnection(connectionId: string, input: {
-  csrfToken?: string | null;
-}) {
+export async function probeDriveConnection(
+  connectionId: string,
+  input: {
+    csrfToken?: string | null;
+  },
+) {
   return await requestJson(
     `/api/workspace/connections/${connectionId}/drive-probe`,
-    { parse: (v: unknown) => v as { probe: { ok: boolean; summary: string }; status: { state: string; summary: string }; recovery_hints: Array<{ code: string; label: string; description: string }> } },
+    {
+      parse: (v: unknown) =>
+        v as {
+          probe: { ok: boolean; summary: string };
+          status: { state: string; summary: string };
+          recovery_hints: Array<{
+            code: string;
+            label: string;
+            description: string;
+          }>;
+        },
+    },
     {
       method: "POST",
       csrfToken: input.csrfToken ?? null,
@@ -966,7 +1163,12 @@ export type GitHubProbeResult = {
   ok: boolean;
   checkedAt: string;
   summary: string;
-  issues: Array<{ severity: string; code: string; summary: string; detail?: string }>;
+  issues: Array<{
+    severity: string;
+    code: string;
+    summary: string;
+    detail?: string;
+  }>;
   user?: { login: string; name: string | null };
   scopes?: string[];
 };
@@ -998,12 +1200,15 @@ export async function getGitHubStatus(connectionId: string) {
   );
 }
 
-export async function setupGitHub(connectionId: string, input: {
-  personalAccessToken: string;
-  org?: string;
-  repos?: string[];
-  csrfToken: string;
-}) {
+export async function setupGitHub(
+  connectionId: string,
+  input: {
+    personalAccessToken: string;
+    org?: string;
+    repos?: string[];
+    csrfToken: string;
+  },
+) {
   return await requestJson(
     `/api/workspace/connections/${connectionId}/github-setup`,
     githubStatusSchema,
@@ -1019,9 +1224,12 @@ export async function setupGitHub(connectionId: string, input: {
   );
 }
 
-export async function probeGitHub(connectionId: string, input: {
-  csrfToken: string;
-}) {
+export async function probeGitHub(
+  connectionId: string,
+  input: {
+    csrfToken: string;
+  },
+) {
   const probeSchema = { parse: (v: unknown) => v as GitHubProbeResult };
   return await requestJson(
     `/api/workspace/connections/${connectionId}/github-probe`,
@@ -1051,17 +1259,23 @@ export async function updateConnectionAttachedWorkers(input: {
   );
 }
 
-export async function listWorkspaceInputRoutes(input?: { workerId?: string | null }) {
+export async function listWorkspaceInputRoutes(input?: {
+  workerId?: string | null;
+}) {
   const params = new URLSearchParams();
   if (input?.workerId) {
     params.set("worker_id", input.workerId);
   }
   const query = params.toString();
-  const path = query ? `/api/workspace/input-routes?${query}` : "/api/workspace/input-routes";
+  const path = query
+    ? `/api/workspace/input-routes?${query}`
+    : "/api/workspace/input-routes";
   return await requestJson(path, inputRouteListResponseSchema);
 }
 
-export async function listWorkspaceActionCapabilities(input?: { workerId?: string | null }) {
+export async function listWorkspaceActionCapabilities(input?: {
+  workerId?: string | null;
+}) {
   const params = new URLSearchParams();
   if (input?.workerId) {
     params.set("worker_id", input.workerId);
@@ -1074,15 +1288,24 @@ export async function listWorkspaceActionCapabilities(input?: { workerId?: strin
 }
 
 export async function listWorkspaceActivity() {
-  return await requestJson("/api/workspace/activity", activityListResponseSchema);
+  return await requestJson(
+    "/api/workspace/activity",
+    activityListResponseSchema,
+  );
 }
 
 export async function getWorkspaceReview(reviewId: string) {
-  return await requestJson(`/api/workspace/reviews/${reviewId}`, getWorkspaceReviewResponseSchema);
+  return await requestJson(
+    `/api/workspace/reviews/${reviewId}`,
+    getWorkspaceReviewResponseSchema,
+  );
 }
 
 export async function listWorkspacePeople() {
-  return await requestJson("/api/workspace/people", workspacePeopleListResponseSchema);
+  return await requestJson(
+    "/api/workspace/people",
+    workspacePeopleListResponseSchema,
+  );
 }
 
 export async function listApprovalSurfaceIdentities() {
@@ -1129,7 +1352,9 @@ export async function updateApprovalSurfaceIdentity(input: {
       method: "PATCH",
       csrfToken: input.csrfToken,
       body: {
-        ...(input.externalIdentity !== undefined ? { external_identity: input.externalIdentity } : {}),
+        ...(input.externalIdentity !== undefined
+          ? { external_identity: input.externalIdentity }
+          : {}),
         ...(input.label !== undefined ? { label: input.label } : {}),
         ...(input.status !== undefined ? { status: input.status } : {}),
       },
@@ -1141,7 +1366,12 @@ export async function updateApprovalSurfaceIdentity(input: {
 // Registry (shared contracts from @clawback/contracts)
 // ---------------------------------------------------------------------------
 
-export type { RegistrySetupStep, RegistryConnectionProvider, RegistryWorkerPack, RegistryResponse };
+export type {
+  RegistrySetupStep,
+  RegistryConnectionProvider,
+  RegistryWorkerPack,
+  RegistryResponse,
+};
 export type { WorkerPackListResponse, WorkerPackInstallResult };
 
 export async function listRegistry() {
@@ -1149,7 +1379,10 @@ export async function listRegistry() {
 }
 
 export async function listWorkerPacks() {
-  return await requestJson("/api/workspace/worker-packs", workerPackListResponseSchema);
+  return await requestJson(
+    "/api/workspace/worker-packs",
+    workerPackListResponseSchema,
+  );
 }
 
 export async function installWorkerPack(input: {
@@ -1157,14 +1390,18 @@ export async function installWorkerPack(input: {
   name?: string;
   csrfToken: string;
 }) {
-  return await requestJson("/api/workspace/workers/install", workerPackInstallResultSchema, {
-    method: "POST",
-    csrfToken: input.csrfToken,
-    body: {
-      pack_id: input.packId,
-      ...(input.name ? { name: input.name } : {}),
+  return await requestJson(
+    "/api/workspace/workers/install",
+    workerPackInstallResultSchema,
+    {
+      method: "POST",
+      csrfToken: input.csrfToken,
+      body: {
+        pack_id: input.packId,
+        ...(input.name ? { name: input.name } : {}),
+      },
     },
-  });
+  );
 }
 
 export async function updateWorkspaceWorker(input: {
@@ -1207,11 +1444,14 @@ export async function updateWorkspaceActionCapability(input: {
   );
 }
 
-export async function resolveReview(reviewId: string, input: {
-  decision: "approved" | "denied";
-  rationale?: string | null;
-  csrfToken?: string | null;
-}) {
+export async function resolveReview(
+  reviewId: string,
+  input: {
+    decision: "approved" | "denied";
+    rationale?: string | null;
+    csrfToken?: string | null;
+  },
+) {
   return await requestJson(
     `/api/workspace/reviews/${reviewId}/resolve`,
     getWorkspaceReviewResponseSchema,
@@ -1226,9 +1466,12 @@ export async function resolveReview(reviewId: string, input: {
   );
 }
 
-export async function retryWorkspaceSend(workItemId: string, input: {
-  csrfToken?: string | null;
-}) {
+export async function retryWorkspaceSend(
+  workItemId: string,
+  input: {
+    csrfToken?: string | null;
+  },
+) {
   return await requestJson(
     `/api/workspace/work/${workItemId}/retry-send`,
     getWorkspaceReviewResponseSchema,
@@ -1239,9 +1482,12 @@ export async function retryWorkspaceSend(workItemId: string, input: {
   );
 }
 
-export async function confirmWorkspaceRouteSuggestion(inboxItemId: string, input: {
-  csrfToken?: string | null;
-}) {
+export async function confirmWorkspaceRouteSuggestion(
+  inboxItemId: string,
+  input: {
+    csrfToken?: string | null;
+  },
+) {
   return await requestJson(
     `/api/workspace/inbox/${inboxItemId}/confirm-route`,
     confirmRouteSuggestionResponseSchema,
@@ -1312,12 +1558,15 @@ export async function getWhatsAppStatus(connectionId: string) {
   );
 }
 
-export async function setupWhatsApp(connectionId: string, input: {
-  phoneNumberId: string;
-  accessToken: string;
-  verifyToken: string;
-  csrfToken: string;
-}) {
+export async function setupWhatsApp(
+  connectionId: string,
+  input: {
+    phoneNumberId: string;
+    accessToken: string;
+    verifyToken: string;
+    csrfToken: string;
+  },
+) {
   return await requestJson(
     `/api/workspace/connections/${connectionId}/whatsapp-setup`,
     whatsappStatusSchema,
@@ -1333,9 +1582,12 @@ export async function setupWhatsApp(connectionId: string, input: {
   );
 }
 
-export async function probeWhatsApp(connectionId: string, input: {
-  csrfToken: string;
-}) {
+export async function probeWhatsApp(
+  connectionId: string,
+  input: {
+    csrfToken: string;
+  },
+) {
   const probeSchema = { parse: (v: unknown) => v as WhatsAppProbeResult };
   return await requestJson(
     `/api/workspace/connections/${connectionId}/whatsapp-probe`,
@@ -1366,10 +1618,13 @@ export type WhatsAppPairingWaitResponse = {
   status: WhatsAppStatusResponse;
 };
 
-export async function setWhatsAppTransportMode(connectionId: string, input: {
-  transportMode: WhatsAppTransportMode;
-  csrfToken: string;
-}) {
+export async function setWhatsAppTransportMode(
+  connectionId: string,
+  input: {
+    transportMode: WhatsAppTransportMode;
+    csrfToken: string;
+  },
+) {
   return await requestJson(
     `/api/workspace/connections/${connectionId}/whatsapp-transport-mode`,
     whatsappStatusSchema,
@@ -1383,12 +1638,17 @@ export async function setWhatsAppTransportMode(connectionId: string, input: {
   );
 }
 
-export async function startWhatsAppPairing(connectionId: string, input: {
-  csrfToken: string;
-  force?: boolean;
-  timeoutMs?: number;
-}) {
-  const pairingSchema = { parse: (v: unknown) => v as WhatsAppPairingStartResponse };
+export async function startWhatsAppPairing(
+  connectionId: string,
+  input: {
+    csrfToken: string;
+    force?: boolean;
+    timeoutMs?: number;
+  },
+) {
+  const pairingSchema = {
+    parse: (v: unknown) => v as WhatsAppPairingStartResponse,
+  };
   return await requestJson(
     `/api/workspace/connections/${connectionId}/whatsapp-pairing/start`,
     pairingSchema,
@@ -1403,11 +1663,16 @@ export async function startWhatsAppPairing(connectionId: string, input: {
   );
 }
 
-export async function waitForWhatsAppPairing(connectionId: string, input: {
-  csrfToken: string;
-  timeoutMs?: number;
-}) {
-  const pairingSchema = { parse: (v: unknown) => v as WhatsAppPairingWaitResponse };
+export async function waitForWhatsAppPairing(
+  connectionId: string,
+  input: {
+    csrfToken: string;
+    timeoutMs?: number;
+  },
+) {
+  const pairingSchema = {
+    parse: (v: unknown) => v as WhatsAppPairingWaitResponse,
+  };
   return await requestJson(
     `/api/workspace/connections/${connectionId}/whatsapp-pairing/wait`,
     pairingSchema,
@@ -1468,12 +1733,15 @@ export async function getSlackStatus(connectionId: string) {
   );
 }
 
-export async function setupSlack(connectionId: string, input: {
-  botToken: string;
-  signingSecret: string;
-  defaultChannel: string;
-  csrfToken: string;
-}) {
+export async function setupSlack(
+  connectionId: string,
+  input: {
+    botToken: string;
+    signingSecret: string;
+    defaultChannel: string;
+    csrfToken: string;
+  },
+) {
   return await requestJson(
     `/api/workspace/connections/${connectionId}/slack-setup`,
     slackStatusSchema,
@@ -1489,9 +1757,12 @@ export async function setupSlack(connectionId: string, input: {
   );
 }
 
-export async function probeSlack(connectionId: string, input: {
-  csrfToken: string;
-}) {
+export async function probeSlack(
+  connectionId: string,
+  input: {
+    csrfToken: string;
+  },
+) {
   const probeSchema = { parse: (v: unknown) => v as SlackProbeResult };
   return await requestJson(
     `/api/workspace/connections/${connectionId}/slack-probe`,
@@ -1503,10 +1774,15 @@ export async function probeSlack(connectionId: string, input: {
   );
 }
 
-export async function testSlackSend(connectionId: string, input: {
-  csrfToken: string;
-}) {
-  const testSchema = { parse: (v: unknown) => v as { ok: boolean; error?: string } };
+export async function testSlackSend(
+  connectionId: string,
+  input: {
+    csrfToken: string;
+  },
+) {
+  const testSchema = {
+    parse: (v: unknown) => v as { ok: boolean; error?: string },
+  };
   return await requestJson(
     `/api/workspace/connections/${connectionId}/slack-test-send`,
     testSchema,
@@ -1522,7 +1798,10 @@ export async function testSlackSend(connectionId: string, input: {
 // ---------------------------------------------------------------------------
 
 export async function listWorkspaceContacts() {
-  return await requestJson("/api/workspace/contacts", contactListResponseSchema);
+  return await requestJson(
+    "/api/workspace/contacts",
+    contactListResponseSchema,
+  );
 }
 
 export async function createWorkspaceContact(input: {
@@ -1543,22 +1822,29 @@ export async function createWorkspaceContact(input: {
   });
 }
 
-export async function updateWorkspaceContact(id: string, input: {
-  csrfToken: string;
-  primary_email?: string;
-  display_name?: string;
-  account_id?: string | null;
-  relationship_class?: string | null;
-  owner_user_id?: string | null;
-  handling_note?: string | null;
-  do_not_auto_reply?: boolean;
-}) {
+export async function updateWorkspaceContact(
+  id: string,
+  input: {
+    csrfToken: string;
+    primary_email?: string;
+    display_name?: string;
+    account_id?: string | null;
+    relationship_class?: string | null;
+    owner_user_id?: string | null;
+    handling_note?: string | null;
+    do_not_auto_reply?: boolean;
+  },
+) {
   const { csrfToken, ...body } = input;
-  return await requestJson(`/api/workspace/contacts/${id}`, contactRecordSchema, {
-    method: "PATCH",
-    csrfToken,
-    body,
-  });
+  return await requestJson(
+    `/api/workspace/contacts/${id}`,
+    contactRecordSchema,
+    {
+      method: "PATCH",
+      csrfToken,
+      body,
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1566,7 +1852,10 @@ export async function updateWorkspaceContact(id: string, input: {
 // ---------------------------------------------------------------------------
 
 export async function listWorkspaceAccounts() {
-  return await requestJson("/api/workspace/accounts", accountListResponseSchema);
+  return await requestJson(
+    "/api/workspace/accounts",
+    accountListResponseSchema,
+  );
 }
 
 export async function createWorkspaceAccount(input: {
@@ -1585,18 +1874,25 @@ export async function createWorkspaceAccount(input: {
   });
 }
 
-export async function updateWorkspaceAccount(id: string, input: {
-  csrfToken: string;
-  name?: string;
-  primary_domain?: string | null;
-  relationship_class?: string | null;
-  owner_user_id?: string | null;
-  handling_note?: string | null;
-}) {
+export async function updateWorkspaceAccount(
+  id: string,
+  input: {
+    csrfToken: string;
+    name?: string;
+    primary_domain?: string | null;
+    relationship_class?: string | null;
+    owner_user_id?: string | null;
+    handling_note?: string | null;
+  },
+) {
   const { csrfToken, ...body } = input;
-  return await requestJson(`/api/workspace/accounts/${id}`, accountRecordSchema, {
-    method: "PATCH",
-    csrfToken,
-    body,
-  });
+  return await requestJson(
+    `/api/workspace/accounts/${id}`,
+    accountRecordSchema,
+    {
+      method: "PATCH",
+      csrfToken,
+      body,
+    },
+  );
 }

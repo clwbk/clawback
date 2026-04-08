@@ -145,8 +145,8 @@ export default async function ConnectionsPage({ searchParams }: ConnectionsPageP
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {knowledgeReady
-                  ? "The seeded Company Docs connector is indexed and ready for retrieval."
-                  : "Open Knowledge to confirm the seeded Company Docs connector is indexed before testing retrieval."}
+                  ? "A seeded knowledge connector is indexed and ready for retrieval."
+                  : "Open Knowledge to confirm the seeded incident demo connector is indexed before testing retrieval."}
               </p>
             </div>
             <span className="text-sm font-medium text-primary">Open Knowledge &rarr;</span>

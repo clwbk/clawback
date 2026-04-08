@@ -21,6 +21,12 @@ curl -s http://localhost:3011/readyz
 
 If `/healthz` fails, the service is down. If `/readyz` fails, a dependency like Postgres or PgBoss is not ready.
 
+`/readyz` is intentionally basic. It does not prove that the OpenClaw runtime
+is reachable or that the expected model provider key is present. For that,
+sign in as an admin and inspect the runtime readiness card on
+`/workspace/setup`, or call `GET /api/admin/runtime-readiness` with an admin
+session.
+
 ## Login Fails
 
 ### Demo credentials fail
@@ -155,6 +161,48 @@ If these fail, inspect:
 - runtime logs
 - model credentials
 
+## Console / Browser Problems
+
+### Workspace page renders with a large blank area or obviously wrong layout until a hard refresh
+
+Symptom:
+
+- the workspace shell loads, but the page looks partially blank, badly spaced, or otherwise visually wrong
+- `Cmd-Shift-R` or another full hard refresh fixes it immediately
+
+What to try first:
+
+- hard refresh the page
+- if you are in local dev, restart the console dev server
+- if the problem persists, restart the full local stack with `./scripts/start-local.sh`
+
+Current best explanation:
+
+- this does **not** look like a service-worker or PWA cache problem; the console app does not currently register one
+- it is more likely a stale local-dev client bundle, CSS chunk, or hydration mismatch in the Next.js dev path
+
+Plausible causes in the current code:
+
+- the console runs on Next.js 16 with Turbopack in dev, which can occasionally leave a stale browser view after shell or layout changes
+- `apps/console/next.config.ts` sets security headers but does not add custom browser cache-control rules, so this still depends on normal Next.js dev asset behavior
+- the workspace shell is client-hydrated and pulls live client state through `useSession`, `useApprovalSummary`, `useSetupProgress`, and `useWorkspaceRail`; if an older client bundle hydrates against newer server output, the shell can render incorrectly until a full reload
+- the root layout uses `ThemeProvider` plus `suppressHydrationWarning`, so a theme or class mismatch is also possible, although the current symptom looks more like shell/layout state than a pure dark-mode issue
+- the shell layout uses `h-screen`, `overflow-hidden`, and nested `h-full` scrolling containers, so stale CSS or mismatched client markup can produce very visible blank-space artifacts
+
+Relevant code paths:
+
+- `apps/console/app/layout.tsx`
+- `apps/console/app/workspace/workspace-shell.tsx`
+- `apps/console/app/components/layout/app-shell.tsx`
+- `apps/console/app/globals.css`
+- `apps/console/next.config.ts`
+
+Status:
+
+- observed in local development
+- hard refresh is the current workaround
+- if this keeps recurring, capture the exact URL, whether local dev had just restarted, browser console errors, and network failures for `/_next/static/*` JS/CSS chunks before refreshing
+
 ## Docker / Deployment Problems
 
 ### Console container cannot reach the control plane
@@ -190,10 +238,11 @@ When in doubt, use this order:
 
 1. `curl /healthz`
 2. `curl /readyz`
-3. `./scripts/verify-seed.sh`
-4. `./scripts/public-try-verify.sh`
-5. inspect `Inbox`, `Work`, and `Activity`
-6. inspect container or process logs
+3. inspect runtime readiness on `/workspace/setup`
+4. `./scripts/verify-seed.sh`
+5. `./scripts/public-try-verify.sh`
+6. inspect `Inbox`, `Work`, and `Activity`
+7. inspect container or process logs
 
 ## See Also
 

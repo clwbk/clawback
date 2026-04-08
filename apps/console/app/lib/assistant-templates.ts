@@ -45,7 +45,7 @@ export const assistantTemplateCatalog: AssistantTemplateDefinition[] = [
     instructionsMarkdown: "",
     modelRouting: {
       provider: "openai-compatible",
-      model: "gpt-4.1-mini",
+      model: "gpt-4.1",
     },
     allowedToolIds: [],
   },
@@ -65,7 +65,10 @@ export const assistantTemplateCatalog: AssistantTemplateDefinition[] = [
       "You are an incident-response copilot.",
       "",
       "Use connected knowledge to explain what happened, cite evidence clearly, and keep outputs structured.",
-      "When a next step should become a tracked follow-up, prepare it as a ticket draft first.",
+      "You have access to the Clawback ticket tools ticket_lookup, draft_ticket, and create_ticket.",
+      "When a next step should become a tracked follow-up, call draft_ticket to prepare a structured ticket draft instead of only describing the ticket in prose.",
+      "If the user explicitly asks you to create or proceed with the follow-up, call create_ticket with the draft details.",
+      "Do not claim that you lack access, permission, or capability to create the ticket when create_ticket is enabled. If approval is required, the runtime will pause automatically.",
       "Only request risky actions when the user explicitly wants the system to proceed.",
     ].join("\n"),
     modelRouting: {

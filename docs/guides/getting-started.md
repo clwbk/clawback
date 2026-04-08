@@ -1,73 +1,112 @@
 # Getting Started with Clawback
 
-How to run Clawback locally, understand the current product shape, and get to first value.
+How to understand the current product, choose the right entry path, and get to
+an honest first impression quickly.
 
-**Audience:** Admins, evaluators, and contributors setting up Clawback for the first time.
+**Audience:** First-time evaluators, operators, and contributors.
 
-## What Clawback Is
+If you want the shortest decision page before diving deeper, start with
+[Start Here](./start-here.md).
 
-Clawback is a self-hosted AI worker control plane. The core product is not a Gmail app or a chat wrapper. It is a governed workspace where:
+## Start Here
 
-- workers are installed and configured in-product
-- source events become durable inbox and work items
-- reviews gate consequential actions
-- execution state and outcomes stay visible
-- providers like Gmail, SMTP, Slack, and n8n plug into that shared truth
+Most people want one of three things:
 
-The main operator surfaces today are:
+1. **Try the hosted demo**
+   - go straight to [Demo Walkthrough](./demo-walkthrough.md)
+2. **Run Clawback locally**
+   - use [Quickstart](./quickstart.md)
+3. **Deploy it for real**
+   - use [Deployment](./deployment.md)
 
-- `Today`
-- `Workers`
-- `Inbox`
-- `Work`
-- `Activity`
-- `Connections`
-- `Connectors`
-- `Setup`
+If you are not sure which to choose, start with the demo walkthrough first.
+If you are running a local or self-hosted admin workspace, start with
+[Quickstart](./quickstart.md) instead so you land on the worker-first setup
+path.
 
-## Prerequisites
+## What Clawback Is Actually Promising
 
-| Requirement | Minimum | Notes |
-| --- | --- | --- |
-| Node.js | `22.12` | Required for local development |
-| pnpm | `10.29` | Workspace package manager |
-| Docker | recent | Must be running |
-| Model credentials | one provider key | Usually `OPENAI_API_KEY` |
+Clawback is a self-hosted AI worker control plane.
 
-Clawback can start without Gmail, SMTP, or Slack. Gmail is optional for first value.
+The promise is not:
+
+- "connect everything and the AI will magically run your business"
+
+The promise is:
+
+- workers can use internal context
+- workers can draft or propose actions
+- reviews gate the actions that matter
+- durable work and activity remain visible after the run
+
+That means the product is strongest when you want:
+
+- grounded answers from internal docs
+- draft generation with human review
+- controlled automation instead of hidden automation
+- visible operational truth after the assistant finishes
+
+## If You Want To Automate XYZ For Your Business
+
+A good Clawback workflow usually has five parts:
+
+1. **Trigger**
+   - what starts the work?
+   - chat, forwarded email, watched inbox, or another connection
+2. **Context**
+   - what docs, notes, or records should the worker see?
+3. **Behavior**
+   - what worker or assistant should interpret that input?
+4. **Boundary**
+   - what is allowed automatically, and what needs human review?
+5. **Outcome**
+   - what should show up afterward in `Inbox`, `Work`, and `Activity`?
+
+Map your use case like this:
+
+| Business goal | Likely Clawback shape |
+| --- | --- |
+| Draft a customer reply | inbound message -> follow-up worker -> review -> approved send |
+| Investigate an incident and create a ticket | knowledge source -> incident assistant -> ticket draft -> review -> create ticket |
+| Turn scattered notes into a proposal | uploaded context -> proposal worker -> draft output -> revise or review |
+
+If you cannot answer those five questions yet, the right next step is not more
+configuration. It is clarifying the workflow.
+
+## The Fastest Way To Understand The Product
+
+There are now two honest first paths:
+
+1. **Hosted/public evaluator path**
+   - open [Demo Walkthrough](./demo-walkthrough.md)
+   - use the retrieval-first `Incident Copilot` path
+2. **Local or self-hosted admin path**
+   - use [Quickstart](./quickstart.md)
+   - sign in as the demo admin
+   - open `/workspace/setup`
+   - use `Run sample activity` to reach the worker proof rail
+
+Together, those give the shortest honest answer to:
+
+- what the product is about
+- what it feels like in use
+- what is already real
 
 ## Local Start
 
-### 1. Clone and install
+If you want a local stack quickly:
 
 ```bash
 git clone https://github.com/clwbk/clawback.git clawback
 cd clawback
 pnpm install
-```
-
-### 2. Export a model provider key
-
-```bash
 export OPENAI_API_KEY=sk-...
-```
-
-New workers can be installed without this, but runtime execution will fail once a worker needs model inference.
-
-### 3. Start the stack
-
-```bash
 ./scripts/start-local.sh
 ```
 
-This starts Postgres, MinIO, OpenClaw, the control plane, the runtime worker, and the console.
-If a sibling `../openclaw` checkout is present, Clawback uses it for the
-gateway; otherwise the script falls back to the repo-contained Docker OpenClaw
-service automatically.
+Then bootstrap the first admin at:
 
-### 4. Bootstrap the first admin
-
-Open [http://localhost:3000/setup](http://localhost:3000/setup) and create the first workspace admin.
+- `http://localhost:3000/setup`
 
 Suggested local values:
 
@@ -77,9 +116,7 @@ Suggested local values:
 - Display name: `Admin`
 - Password: `password1`
 
-### 5. Load the demo workspace
-
-If you want realistic sample data immediately:
+If you want seeded demo data immediately:
 
 ```bash
 pnpm db:seed
@@ -87,106 +124,68 @@ pnpm db:seed
 
 Demo login:
 
-- Email: `dave@hartwell.com`
-- Password: `demo1234`
+- `dave@hartwell.com`
+- `demo1234`
 
-## The Current Product Shape
+For the shortest local setup path, use [Quickstart](./quickstart.md).
 
-Clawback is worker-first.
+## What To Open First After Login
 
-### Workers
+These are the most useful pages for first understanding:
 
-Workers are installed from templates on `/workspace/workers`.
+- `Setup` for the worker-first activation and proof path
+- `Today` for the current workspace state
+- `Inbox` for reviews and items needing attention
+- `Work` for durable outputs
+- `Chat` for the guided assistant path
+- `Knowledge` for grounded retrieval sources
+- `Activity` for audit truth
 
-Each worker owns:
+Those pages now tell two complementary stories: the worker-first setup proof
+and the retrieval-first guided assistant path.
 
-- people
-- input routes
-- attached connections
-- action capabilities
-- action boundary posture
+## Current First-Value Paths
 
-The current install flow is:
+### 1. Worker-first setup proof
 
-1. Open `Workers`
-2. Click `Add worker`
-3. Choose a worker template
-4. Name it
-5. Open the worker page
-6. Assign members, assignees, and reviewers
-7. Attach any required connections
-8. Confirm the action posture
+This is the clearest admin/local first impression:
 
-### Inbox
+- open `Setup`
+- use `Run sample activity`
+- follow the worker proof rail into `Inbox`, `Work`, or `Activity`
 
-`/workspace/inbox` is where operators and reviewers handle:
+### 2. Guided assistant demo
 
-- pending reviews
-- route handoff suggestions
-- setup items
-- execution failures that need attention
+This is the strongest public evaluator impression:
 
-### Work
+- open `Chat`
+- use `Incident Copilot`
+- ask the guided prompts from [Demo Walkthrough](./demo-walkthrough.md)
 
-`/workspace/work` shows durable outputs:
+### 3. Reviewed email path
 
-- email drafts
-- proposal drafts
-- saved work
-- route-created downstream work
+This proves the governed-action lane:
 
-It also shows execution state and final outcome truth.
+- forwarded email creates work
+- a review gates the send
+- outcome remains visible after approval or failure
 
-### Activity
-
-`/workspace/activity` is the audit trail for what workers observed, drafted, reviewed, routed, completed, or failed.
-
-### Connections
-
-`/workspace/connections` is where providers are configured.
-
-Current first-party references:
-
-- Gmail read-only
-- SMTP relay
-- Slack approval surface
-- n8n outbound + callback
-- Drive / GitHub / WhatsApp as narrower or evolving provider surfaces
-
-### Connectors
-
-`/workspace/connectors` is the low-trust retrieval path today. The most important current connector is a local directory sync for document retrieval.
-
-## First Value Paths
-
-Clawback should provide first value even without Gmail.
-
-### Path A: Forwarded email
-
-This is the simplest first-value path:
-
-1. Keep the seeded `followup@...` route or configure a forward-email route
-2. Send a forwarded email into the Postmark-style webhook
-3. Observe the worker create work and a pending review
-4. Approve or deny in `Inbox`
-
-Use:
+Useful scripts:
 
 ```bash
 ./scripts/test-forward-email.sh
 ./scripts/test-approve-review.sh
+./scripts/test-smtp-send.sh
 ```
 
-### Path B: Local retrieval
+### 4. Retrieval path without Gmail
 
-This is the simplest no-trust context path:
+This proves low-trust first value without requiring Google setup:
 
-1. Open `/workspace/connectors` and inspect the seeded `Company Docs` connector
-2. Confirm it already has a completed sync job after `pnpm db:seed`
-3. Run the retrieval smokes against that seeded corpus
-4. Add another local-directory connector only if you want to try a different document set
-
-Useful smoke commands:
+1. open `Knowledge`
+2. inspect the seeded `Incident Copilot Demo` connector
+3. confirm the sync completed
+4. run the retrieval smokes if you are local
 
 ```bash
 pnpm smoke:connector-sync
@@ -194,53 +193,25 @@ pnpm smoke:incident-copilot
 pnpm smoke:incident-copilot-action
 ```
 
-### Path C: Gmail read-only watch
+## What A Strong First Evaluation Should Prove
 
-Gmail is optional but supported as a provider:
+By the end of a good first run, you should be able to say:
 
-1. Open `/workspace/connections`
-2. Configure Gmail via `Connect with Google`, service account, or manual credentials
-3. Attach the connection to a worker that has a `watched_inbox` route
-4. Use `Check inbox now` to establish the first baseline and later poll for shadow suggestions
+- the product can use known internal context
+- it can draft a useful next step
+- it does not skip the human checkpoint
+- work and activity stay visible after the run
+- the demo story maps to a real business workflow shape
 
-Gmail remains read-only. Reviewed sends still use SMTP.
+If you cannot say those yet, the next task is usually better guidance or
+clearer workflow mapping, not another integration.
 
-## Reviewed Actions
+## See Also
 
-The core reviewed-send flow is:
-
-1. A worker drafts an action
-2. Clawback creates a pending review
-3. A human approves or denies it
-4. If approved, Clawback checks whether the execution path is actually configured
-5. If execution is configured, it runs and records outcome truth
-6. If execution is not configured, the review stays pending and the operator sees the configuration gap
-
-Important current behavior:
-
-- `approved` is not the same thing as `completed`
-- execution can fail after approval
-- failed reviewed sends can be retried from the review/work surfaces
-
-## A Good First Session
-
-Use this sequence:
-
-1. Start the stack with `./scripts/start-local.sh`
-2. Seed demo data with `pnpm db:seed`
-3. Log in as `dave@hartwell.com`
-4. Open `Workers`, `Inbox`, `Work`, and `Activity`
-5. Run `pnpm smoke:public-try`
-6. Inspect the seeded `Company Docs` connector and run the retrieval smokes
-7. Optionally connect Gmail or SMTP from `Connections`
-8. Optionally add another local-directory connector if you want a different corpus
-
-## Next Steps
-
+- [Start Here](./start-here.md)
+- [Demo Walkthrough](./demo-walkthrough.md)
 - [Quickstart](./quickstart.md)
 - [First-Run Guide](./first-run.md)
-- [Admin Guide](./admin-guide.md)
-- [User Guide](./user-guide.md)
-- [Deployment Guide](./deployment.md)
+- [Deployment](./deployment.md)
 - [Verification and Testing](./verification-and-testing.md)
 - [Known Limitations](./known-limitations.md)

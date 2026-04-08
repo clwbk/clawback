@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import {
-  createRunEventSource,
-  parseSseEnvelope,
+  getRunEvents,
   type RunEventRecord,
   type RunRecord,
 } from "@/lib/control-plane";
@@ -17,6 +16,23 @@ type Notice = {
   tone: "error" | "success" | "info";
   message: string;
 };
+
+const RUN_STREAM_RECONNECT_BASE_DELAY_MS = 1000;
+const RUN_STREAM_RECONNECT_MAX_DELAY_MS = 30_000;
+const RUN_STREAM_RECONNECT_MAX_ATTEMPTS = 5;
+const RUN_EVENT_POLL_INTERVAL_MS = 750;
+
+export function getRunStreamReconnectDelayMs(attempt: number) {
+  if (attempt < 1) return 0;
+  return Math.min(
+    RUN_STREAM_RECONNECT_BASE_DELAY_MS * 2 ** (attempt - 1),
+    RUN_STREAM_RECONNECT_MAX_DELAY_MS,
+  );
+}
+
+export function shouldRetryRunStreamReconnect(attempt: number) {
+  return attempt <= RUN_STREAM_RECONNECT_MAX_ATTEMPTS;
+}
 
 // --- Helper functions ---
 
@@ -224,162 +240,209 @@ export function useRunStream(
   onStreamEnd: (conversationId: string, runId: string) => void,
   handlers: RunStreamHandlers,
 ) {
-  const streamRef = useRef<EventSource | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSequenceByRunRef = useRef<Record<string, number>>({});
   const isStreaming = streamTarget !== null;
 
-  const handleStreamMessage = useEffectEvent((rawEvent: MessageEvent<string>) => {
-    const envelope = parseSseEnvelope(rawEvent.data);
-    if (envelope.type === "keepalive") return;
+  const clearPollTimer = () => {
+    if (pollTimerRef.current !== null) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
 
-    const syntheticEvent = buildSyntheticEvent({
-      runId: envelope.run_id,
-      sequence: envelope.sequence,
-      type: envelope.type,
-      data: envelope.data,
-    });
+  const clearStreamTarget = useEffectEvent(() => {
+    handlers.setStreamTarget(null);
+  });
 
-    if (syntheticEvent) {
+  const applyObservedRunEvent = useEffectEvent(
+    (event: RunEventRecord, conversationId: string) => {
       handlers.setRunEventsById((current) => ({
         ...current,
-        [envelope.run_id]: mergeRunEvents(current[envelope.run_id] ?? [], syntheticEvent),
+        [event.run_id]: mergeRunEvents(current[event.run_id] ?? [], event),
       }));
-    }
 
-    if (envelope.type === "assistant.delta") {
-      const delta = typeof envelope.data.delta === "string" ? envelope.data.delta : "";
-      handlers.setAssistantDrafts((current) => ({
-        ...current,
-        [envelope.run_id]: `${current[envelope.run_id] ?? ""}${delta}`,
-      }));
-      handlers.setRunsById((current) => {
-        const record = current[envelope.run_id];
-        if (!record) return current;
-        return {
+      if (event.event_type === "run.output.delta") {
+        const delta = typeof event.payload.delta === "string" ? event.payload.delta : "";
+        handlers.setAssistantDrafts((current) => ({
           ...current,
-          [envelope.run_id]: { ...record, status: "running", current_step: "modeling" },
-        };
-      });
-      return;
-    }
+          [event.run_id]: `${current[event.run_id] ?? ""}${delta}`,
+        }));
+        handlers.setRunsById((current) => {
+          const record = current[event.run_id];
+          if (!record) return current;
+          return {
+            ...current,
+            [event.run_id]: { ...record, status: "running", current_step: "modeling" },
+          };
+        });
+        return false;
+      }
 
-    if (envelope.type === "run.status") {
-      const eventType = typeof envelope.data.event_type === "string" ? envelope.data.event_type : null;
-      if (!eventType) return;
+      if (event.event_type === "run.claimed") {
+        handlers.setRunsById((current) => {
+          const record = current[event.run_id];
+          if (!record) return current;
+          return {
+            ...current,
+            [event.run_id]: { ...record, status: "running", current_step: "claimed" },
+          };
+        });
+        return false;
+      }
 
-      handlers.setRunsById((current) => {
-        const record = current[envelope.run_id];
-        if (!record) return current;
+      if (event.event_type === "run.dispatch.accepted") {
+        handlers.setRunsById((current) => {
+          const record = current[event.run_id];
+          if (!record) return current;
+          return {
+            ...current,
+            [event.run_id]: { ...record, status: "running", current_step: "dispatched" },
+          };
+        });
+        return false;
+      }
 
-        let nextStatus = record.status;
-        let nextStep = record.current_step;
+      if (event.event_type === "run.model.started") {
+        handlers.setRunsById((current) => {
+          const record = current[event.run_id];
+          if (!record) return current;
+          return {
+            ...current,
+            [event.run_id]: { ...record, status: "running", current_step: "modeling" },
+          };
+        });
+        return false;
+      }
 
-        if (eventType === "run.claimed") { nextStatus = "running"; nextStep = "claimed"; }
-        if (eventType === "run.dispatch.accepted") { nextStatus = "running"; nextStep = "dispatched"; }
-        if (eventType === "run.model.started") { nextStatus = "running"; nextStep = "modeling"; }
-        if (eventType === "run.waiting_for_approval") {
-          nextStatus = "waiting_for_approval";
-          nextStep = "approval";
-        }
-        if (eventType === "run.approval.resolved") {
-          nextStatus = "running";
-          nextStep = "approval-resolved";
-        }
+      if (event.event_type === "run.waiting_for_approval") {
+        handlers.setRunsById((current) => {
+          const record = current[event.run_id];
+          if (!record) return current;
+          return {
+            ...current,
+            [event.run_id]: {
+              ...record,
+              status: "waiting_for_approval",
+              current_step: "approval",
+            },
+          };
+        });
+        return false;
+      }
 
-        return {
-          ...current,
-          [envelope.run_id]: { ...record, status: nextStatus, current_step: nextStep },
-        };
-      });
-      return;
-    }
+      if (event.event_type === "run.approval.resolved") {
+        handlers.setRunsById((current) => {
+          const record = current[event.run_id];
+          if (!record) return current;
+          return {
+            ...current,
+            [event.run_id]: {
+              ...record,
+              status: "running",
+              current_step: "approval-resolved",
+            },
+          };
+        });
+        return false;
+      }
 
-    if (envelope.type === "run.approval.required") {
-      handlers.setRunsById((current) => {
-        const record = current[envelope.run_id];
-        if (!record) return current;
-        return {
-          ...current,
-          [envelope.run_id]: { ...record, status: "waiting_for_approval", current_step: "approval" },
-        };
-      });
-      return;
-    }
+      if (event.event_type === "run.completed" || event.event_type === "run.failed") {
+        clearPollTimer();
+        handlers.setStreamTarget(null);
+        handlers.setAssistantDrafts((current) => {
+          const next = { ...current };
+          delete next[event.run_id];
+          return next;
+        });
 
-    if (envelope.type === "run.approval.resolved") {
-      handlers.setRunsById((current) => {
-        const record = current[envelope.run_id];
-        if (!record) return current;
-        return {
-          ...current,
-          [envelope.run_id]: { ...record, status: "running", current_step: "approval-resolved" },
-        };
-      });
-      return;
-    }
+        handlers.setRunsById((current) => {
+          const record = current[event.run_id];
+          if (!record) return current;
+          return {
+            ...current,
+            [event.run_id]: {
+              ...record,
+              status: event.event_type === "run.completed" ? "completed" : "failed",
+              current_step: null,
+              summary:
+                event.event_type === "run.completed"
+                  ? typeof event.payload.assistant_text === "string"
+                    ? event.payload.assistant_text
+                    : record.summary
+                  : typeof event.payload.error === "string"
+                    ? event.payload.error
+                    : record.summary,
+            },
+          };
+        });
 
-    if (envelope.type === "assistant.completed" || envelope.type === "run.failed") {
-      handlers.setStreamTarget(null);
-      handlers.setAssistantDrafts((current) => {
-        const next = { ...current };
-        delete next[envelope.run_id];
-        return next;
-      });
+        onStreamEnd(conversationId, event.run_id);
+        return true;
+      }
 
-      handlers.setRunsById((current) => {
-        const record = current[envelope.run_id];
-        if (!record) return current;
-        return {
-          ...current,
-          [envelope.run_id]: {
-            ...record,
-            status: envelope.type === "assistant.completed" ? "completed" : "failed",
-            current_step: null,
-            summary:
-              envelope.type === "assistant.completed"
-                ? typeof envelope.data.assistant_text === "string"
-                  ? envelope.data.assistant_text
-                  : record.summary
-                : typeof envelope.data.error === "string"
-                  ? envelope.data.error
-                  : record.summary,
-          },
-        };
-      });
-
-      onStreamEnd(envelope.conversation_id, envelope.run_id);
-    }
-  });
+      return false;
+    },
+  );
 
   useEffect(() => {
     if (!streamTarget) {
-      streamRef.current?.close();
-      streamRef.current = null;
+      clearPollTimer();
       return;
     }
 
-    const stream = createRunEventSource(streamTarget.runId);
-    streamRef.current = stream;
+    let canceled = false;
+    lastSequenceByRunRef.current[streamTarget.runId] = 0;
+    onNotice(null);
 
-    stream.onmessage = (event) => {
-      handleStreamMessage(event);
+    const pollEvents = async () => {
+      try {
+        const response = await getRunEvents(streamTarget.runId);
+        if (canceled) return;
+
+        const lastSequence = lastSequenceByRunRef.current[streamTarget.runId] ?? 0;
+        const nextEvents = response.events
+          .filter((event) => event.sequence > lastSequence)
+          .sort((left, right) => left.sequence - right.sequence);
+
+        let observedTerminalEvent = false;
+        for (const event of nextEvents) {
+          lastSequenceByRunRef.current[streamTarget.runId] = event.sequence;
+          if (applyObservedRunEvent(event, streamTarget.conversationId)) {
+            observedTerminalEvent = true;
+            break;
+          }
+        }
+
+        if (canceled || observedTerminalEvent) {
+          return;
+        }
+
+        clearPollTimer();
+        pollTimerRef.current = setTimeout(() => {
+          void pollEvents();
+        }, RUN_EVENT_POLL_INTERVAL_MS);
+      } catch {
+        if (canceled) return;
+
+        clearPollTimer();
+        clearStreamTarget();
+        onNotice({
+          tone: "info",
+          message: "Live updates disconnected. Reloading from persisted state keeps the transcript consistent.",
+        });
+        onStreamEnd(streamTarget.conversationId, streamTarget.runId);
+      }
     };
 
-    stream.onerror = () => {
-      stream.close();
-      if (streamRef.current === stream) streamRef.current = null;
-      handlers.setStreamTarget(null);
-      onNotice({
-        tone: "info",
-        message: "The live stream disconnected. Reloading from persisted state keeps the transcript consistent.",
-      });
-      onStreamEnd(streamTarget.conversationId, streamTarget.runId);
-    };
+    void pollEvents();
 
     return () => {
-      stream.close();
-      if (streamRef.current === stream) streamRef.current = null;
+      canceled = true;
+      clearPollTimer();
+      delete lastSequenceByRunRef.current[streamTarget.runId];
     };
-  }, [handleStreamMessage, streamTarget]);
+  }, [streamTarget]);
 
   return { isStreaming };
 }

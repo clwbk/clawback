@@ -12,6 +12,7 @@ import {
   queueReviewedExternalWorkflowExecution,
 } from "../reviews/reviewed-external-workflow-execution.js";
 import {
+  markReviewedSendExecutionSent,
   markReviewedSendExecutionRunning,
   queueReviewedSendExecution,
 } from "../reviews/reviewed-send-execution.js";
@@ -338,6 +339,74 @@ async function seedReviewedSendExecutingState(
   });
 }
 
+async function seedReviewedSendPersistedReceiptState(
+  harness: ReturnType<typeof createHarness>,
+  executingSinceMsAgo: number,
+) {
+  const attemptedAt = new Date(Date.now() - executingSinceMsAgo);
+  const sentAt = new Date(attemptedAt.getTime() + 5_000);
+  const executionOutcome = markReviewedSendExecutionSent(
+    markReviewedSendExecutionRunning(
+      queueReviewedSendExecution({
+        existing: null,
+        reviewId: REVIEW_ID,
+        decision: null,
+        connectionId: SMTP_CONNECTION_ID,
+        connectionLabel: "SMTP Relay",
+        attemptedAt,
+      }),
+    ),
+    {
+      providerMessageId: "msg_persisted_01",
+      sentAt,
+    },
+  );
+
+  await harness.workItemStore.create({
+    id: WORK_ITEM_ID,
+    workspaceId: WS,
+    workerId: WORKER_ID,
+    kind: "email_draft",
+    status: "approved",
+    title: "Follow up with Acme",
+    summary: "Crash-safety send recovery test",
+    draftTo: "sarah@acme.com",
+    draftSubject: "Checking in",
+    draftBody: "Wanted to follow up on our last conversation.",
+    executionStatus: "executing",
+    executionError: null,
+    assigneeIds: ["usr_dave"],
+    reviewerIds: ["usr_dave"],
+    sourceRouteKind: "forward_email",
+    sourceEventId: "src_evt_01",
+    sourceInboxItemId: null,
+    reviewId: REVIEW_ID,
+    runId: null,
+    triageJson: null,
+    executionStateJson: null,
+    executionOutcomeJson: executionOutcome,
+    createdAt: attemptedAt,
+    updatedAt: sentAt,
+  });
+
+  await harness.reviewStore.create({
+    id: REVIEW_ID,
+    workspaceId: WS,
+    actionKind: "send_email",
+    status: "approved",
+    workerId: WORKER_ID,
+    workItemId: WORK_ITEM_ID,
+    reviewerIds: ["usr_dave"],
+    assigneeIds: ["usr_dave"],
+    sourceRouteKind: "forward_email",
+    actionDestination: "sarah@acme.com",
+    requestedAt: new Date(attemptedAt.getTime() - 60_000),
+    resolvedAt: attemptedAt,
+    createdAt: new Date(attemptedAt.getTime() - 60_000),
+    updatedAt: sentAt,
+  });
+}
+
 async function seedExternalWorkflowExecutingState(
   harness: ReturnType<typeof createHarness>,
   executingSinceMsAgo: number,
@@ -461,6 +530,40 @@ describe("Crash safety: stale executing guards", () => {
       expect.arrayContaining([
         expect.objectContaining({
           resultKind: "send_failed",
+          workItemId: WORK_ITEM_ID,
+        }),
+      ]),
+    );
+  });
+
+  it("reconciles a reviewed send with a persisted provider receipt without resending", async () => {
+    const harness = createHarness();
+    await seedReviewedSendPersistedReceiptState(harness, 3 * 60_000);
+
+    const result = await harness.resolutionService.resolve(WS, REVIEW_ID, {
+      decision: "approved",
+    });
+
+    expect(result.status).toBe("completed");
+    expect(harness.sendReviewedEmail).not.toHaveBeenCalled();
+
+    const workItem = await harness.workItemService.getById(WS, WORK_ITEM_ID);
+    expect(workItem.status).toBe("sent");
+    expect(workItem.execution_status).toBe("completed");
+    expect(workItem.execution_error).toBeNull();
+    expect(workItem.execution_outcome_json).toMatchObject({
+      kind: "reviewed_send_email",
+      status: "sent",
+      provider_message_id: "msg_persisted_01",
+    });
+
+    const review = await harness.reviewService.getById(WS, REVIEW_ID);
+    expect(review.status).toBe("completed");
+
+    expect(harness.activityStore.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          resultKind: "work_item_sent",
           workItemId: WORK_ITEM_ID,
         }),
       ]),

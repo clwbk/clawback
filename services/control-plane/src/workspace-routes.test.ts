@@ -2,7 +2,11 @@ import * as crypto from "node:crypto";
 
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { AuthServiceError, type AuthServiceContract, type SessionContext } from "@clawback/auth";
+import {
+  AuthServiceError,
+  type AuthServiceContract,
+  type SessionContext,
+} from "@clawback/auth";
 
 import { createControlPlaneApp } from "./app.js";
 import type { WorkspaceReadModelServices } from "./workspace-routes.js";
@@ -35,6 +39,7 @@ import {
 import { ContactService } from "./contacts/index.js";
 import { AccountService } from "./accounts/index.js";
 import type { GitHubConnectionService } from "./integrations/github/index.js";
+import type { ConversationRunServiceContract } from "./orchestration/index.js";
 import type { SlackSetupService } from "./integrations/slack/index.js";
 import type { WhatsAppSetupService } from "./integrations/whatsapp/index.js";
 import type { GmailPollingServiceContract } from "./integrations/watched-inbox/index.js";
@@ -43,10 +48,19 @@ import type { StoredWorker, WorkerStore } from "./workers/types.js";
 import type { StoredWorkItem, WorkItemStore } from "./work-items/types.js";
 import type { StoredInboxItem, InboxItemStore } from "./inbox/types.js";
 import type { StoredReview, ReviewStore } from "./reviews/types.js";
-import type { StoredReviewDecision, ReviewDecisionStore } from "./reviews/decision-types.js";
-import type { StoredActivityEvent, ActivityEventStore } from "./activity/types.js";
+import type {
+  StoredReviewDecision,
+  ReviewDecisionStore,
+} from "./reviews/decision-types.js";
+import type {
+  StoredActivityEvent,
+  ActivityEventStore,
+} from "./activity/types.js";
 import type { StoredConnection, ConnectionStore } from "./connections/types.js";
-import type { StoredInputRoute, InputRouteStore } from "./input-routes/types.js";
+import type {
+  StoredInputRoute,
+  InputRouteStore,
+} from "./input-routes/types.js";
 import type { StoredContact, ContactStore } from "./contacts/index.js";
 import type { StoredAccount, AccountStore } from "./accounts/index.js";
 import type {
@@ -71,7 +85,11 @@ function serializeCookies(setCookie: string[]) {
   return setCookie.map((cookie) => cookie.split(";")[0]).join("; ");
 }
 
-function signSlackInteraction(secret: string, timestamp: string, rawBody: string) {
+function signSlackInteraction(
+  secret: string,
+  timestamp: string,
+  rawBody: string,
+) {
   return `v0=${crypto
     .createHmac("sha256", secret)
     .update(`v0:${timestamp}:${rawBody}`)
@@ -177,11 +195,75 @@ function createFakeReviewedExternalWorkflowExecutor(options?: {
 
       return {
         response_status_code: options?.responseStatusCode ?? 202,
-        response_summary: options?.responseSummary ?? "Workflow accepted by n8n.",
+        response_summary:
+          options?.responseSummary ?? "Workflow accepted by n8n.",
         backend_reference: options?.backendReference ?? "exec_n8n_01",
       };
     },
   };
+}
+
+class FakeConversationRunService implements ConversationRunServiceContract {
+  async listConversations(
+    _actor: SessionContext,
+    _input: Parameters<ConversationRunServiceContract["listConversations"]>[1],
+  ): ReturnType<ConversationRunServiceContract["listConversations"]> {
+    return { conversations: [] };
+  }
+
+  async createConversation(
+    _actor: SessionContext,
+    _input: Parameters<ConversationRunServiceContract["createConversation"]>[1],
+  ): ReturnType<ConversationRunServiceContract["createConversation"]> {
+    throw new Error(
+      "conversation routes are not exercised in workspace route tests",
+    );
+  }
+
+  async getConversation(
+    _actor: SessionContext,
+    _conversationId: string,
+  ): ReturnType<ConversationRunServiceContract["getConversation"]> {
+    throw new Error(
+      "conversation routes are not exercised in workspace route tests",
+    );
+  }
+
+  async createRun(
+    _actor: SessionContext,
+    _input: Parameters<ConversationRunServiceContract["createRun"]>[1],
+  ): ReturnType<ConversationRunServiceContract["createRun"]> {
+    throw new Error("run creation is not exercised in workspace route tests");
+  }
+
+  async getRun(
+    _actor: SessionContext,
+    _runId: string,
+  ): ReturnType<ConversationRunServiceContract["getRun"]> {
+    throw new Error("run routes are not exercised in workspace route tests");
+  }
+
+  async listRunEvents(
+    _actor: SessionContext,
+    _runId: string,
+  ): ReturnType<ConversationRunServiceContract["listRunEvents"]> {
+    return [];
+  }
+
+  async getRunStreamContext(
+    _actor: SessionContext,
+    _runId: string,
+  ): ReturnType<ConversationRunServiceContract["getRunStreamContext"]> {
+    throw new Error("run streaming is not exercised in workspace route tests");
+  }
+
+  async listRunEventsAfter(
+    _actor: SessionContext,
+    _runId: string,
+    _afterSequence: number,
+  ): ReturnType<ConversationRunServiceContract["listRunEventsAfter"]> {
+    return [];
+  }
 }
 
 function createFakeSlackSetupService(options?: {
@@ -195,42 +277,48 @@ function createFakeSlackSetupService(options?: {
 }): SlackSetupService {
   return {
     async setup() {
-      return options?.setupResult ?? {
-        connection_id: "conn_slack_01",
-        connection_status: "connected",
-        operational: {
-          state: "ready",
-          summary: "Connected as Clawbot in Acme.",
-          lastProbeAt: "2026-03-25T12:00:00Z",
-          blockingIssueCodes: [],
-        },
-        probe: null,
-        recovery_hints: [],
-      };
+      return (
+        options?.setupResult ?? {
+          connection_id: "conn_slack_01",
+          connection_status: "connected",
+          operational: {
+            state: "ready",
+            summary: "Connected as Clawbot in Acme.",
+            lastProbeAt: "2026-03-25T12:00:00Z",
+            blockingIssueCodes: [],
+          },
+          probe: null,
+          recovery_hints: [],
+        }
+      );
     },
     async getStatus() {
-      return options?.statusResult ?? {
-        connection_id: "conn_slack_01",
-        connection_status: "connected",
-        operational: {
-          state: "ready",
-          summary: "Connected as Clawbot in Acme.",
-          lastProbeAt: "2026-03-25T12:00:00Z",
-          blockingIssueCodes: [],
-        },
-        probe: null,
-        recovery_hints: [],
-      };
+      return (
+        options?.statusResult ?? {
+          connection_id: "conn_slack_01",
+          connection_status: "connected",
+          operational: {
+            state: "ready",
+            summary: "Connected as Clawbot in Acme.",
+            lastProbeAt: "2026-03-25T12:00:00Z",
+            blockingIssueCodes: [],
+          },
+          probe: null,
+          recovery_hints: [],
+        }
+      );
     },
     async probe() {
-      return options?.probeResult ?? {
-        ok: true,
-        checkedAt: "2026-03-25T12:00:00Z",
-        summary: "Connected as Clawbot in Acme.",
-        issues: [],
-        botName: "Clawbot",
-        teamName: "Acme",
-      };
+      return (
+        options?.probeResult ?? {
+          ok: true,
+          checkedAt: "2026-03-25T12:00:00Z",
+          summary: "Connected as Clawbot in Acme.",
+          issues: [],
+          botName: "Clawbot",
+          teamName: "Acme",
+        }
+      );
     },
     async getValidatedConfig() {
       return {
@@ -253,45 +341,51 @@ function createFakeGitHubConnectionService(options?: {
 }): GitHubConnectionService {
   return {
     async setup() {
-      return options?.setupResult ?? {
-        connection_id: "conn_github_01",
-        connection_status: "connected",
-        operational: {
-          state: "ready",
-          summary: "GitHub connection is ready.",
-          lastProbeAt: "2026-03-25T12:00:00Z",
-          blockingIssueCodes: [],
-        },
-        probe: null,
-        recovery_hints: [],
-      };
+      return (
+        options?.setupResult ?? {
+          connection_id: "conn_github_01",
+          connection_status: "connected",
+          operational: {
+            state: "ready",
+            summary: "GitHub connection is ready.",
+            lastProbeAt: "2026-03-25T12:00:00Z",
+            blockingIssueCodes: [],
+          },
+          probe: null,
+          recovery_hints: [],
+        }
+      );
     },
     async getStatus() {
-      return options?.statusResult ?? {
-        connection_id: "conn_github_01",
-        connection_status: "connected",
-        operational: {
-          state: "ready",
-          summary: "GitHub connection is ready.",
-          lastProbeAt: "2026-03-25T12:05:00Z",
-          blockingIssueCodes: [],
-        },
-        probe: null,
-        recovery_hints: [],
-      };
+      return (
+        options?.statusResult ?? {
+          connection_id: "conn_github_01",
+          connection_status: "connected",
+          operational: {
+            state: "ready",
+            summary: "GitHub connection is ready.",
+            lastProbeAt: "2026-03-25T12:05:00Z",
+            blockingIssueCodes: [],
+          },
+          probe: null,
+          recovery_hints: [],
+        }
+      );
     },
     async probe() {
-      return options?.probeResult ?? {
-        ok: true,
-        checkedAt: "2026-03-25T12:10:00Z",
-        summary: "GitHub token is valid.",
-        issues: [],
-        user: {
-          login: "octocat",
-          name: "The Octocat",
-        },
-        scopes: ["repo"],
-      };
+      return (
+        options?.probeResult ?? {
+          ok: true,
+          checkedAt: "2026-03-25T12:10:00Z",
+          summary: "GitHub token is valid.",
+          issues: [],
+          user: {
+            login: "octocat",
+            name: "The Octocat",
+          },
+          scopes: ["repo"],
+        }
+      );
     },
   } as unknown as GitHubConnectionService;
 }
@@ -313,53 +407,67 @@ function createFakeDriveSetupService(options?: {
 }): DriveSetupService {
   return {
     async setup() {
-      return options?.setupResult ?? {
-        configured: true,
-        checked_at: "2026-03-25T12:00:00Z",
-      };
+      return (
+        options?.setupResult ?? {
+          configured: true,
+          checked_at: "2026-03-25T12:00:00Z",
+        }
+      );
     },
     async getSummary() {
-      return options?.summaryResult ?? {
-        configured: true,
-        checked_at: "2026-03-25T12:05:00Z",
-      };
+      return (
+        options?.summaryResult ?? {
+          configured: true,
+          checked_at: "2026-03-25T12:05:00Z",
+        }
+      );
     },
     async probe() {
-      return options?.probeResult ?? {
-        ok: true,
-        issues: [],
-        checkedAt: "2026-03-25T12:10:00Z",
-      };
+      return (
+        options?.probeResult ?? {
+          ok: true,
+          issues: [],
+          checkedAt: "2026-03-25T12:10:00Z",
+        }
+      );
     },
     async status() {
-      return options?.statusResult ?? {
-        state: "ready",
-        summary: "Drive connection is ready.",
-      };
+      return (
+        options?.statusResult ?? {
+          state: "ready",
+          summary: "Drive connection is ready.",
+        }
+      );
     },
     recoveryHints() {
       return options?.recoveryHints ?? [];
     },
     async getOAuthAppCredentials() {
-      return options?.oauthCredentialsResult ?? {
-        configured: true,
-        client_id_present: true,
-      };
+      return (
+        options?.oauthCredentialsResult ?? {
+          configured: true,
+          client_id_present: true,
+        }
+      );
     },
     async saveOAuthAppCredentials() {
       return options?.saveOAuthResult ?? { saved: true };
     },
     async getStoredOAuthAppSecrets() {
-      return options?.storedOAuthSecrets ?? {
-        clientId: "drive-client-id",
-        clientSecret: "drive-client-secret",
-      };
+      return (
+        options?.storedOAuthSecrets ?? {
+          clientId: "drive-client-id",
+          clientSecret: "drive-client-secret",
+        }
+      );
     },
     async completeOAuthFlow() {
-      return options?.oauthCallbackResult ?? {
-        configured: true,
-        checked_at: "2026-03-25T12:15:00Z",
-      };
+      return (
+        options?.oauthCallbackResult ?? {
+          configured: true,
+          checked_at: "2026-03-25T12:15:00Z",
+        }
+      );
     },
   } as unknown as DriveSetupService;
 }
@@ -371,22 +479,28 @@ function createFakeDriveContextService(options?: {
 }): DriveContextService {
   return {
     async listFiles() {
-      return options?.listFilesResult ?? {
-        files: [{ id: "file_01", name: "Proposal.docx" }],
-        next_page_token: null,
-      };
+      return (
+        options?.listFilesResult ?? {
+          files: [{ id: "file_01", name: "Proposal.docx" }],
+          next_page_token: null,
+        }
+      );
     },
     async searchFiles() {
-      return options?.searchFilesResult ?? {
-        files: [{ id: "file_02", name: "Invoice.pdf" }],
-        next_page_token: null,
-      };
+      return (
+        options?.searchFilesResult ?? {
+          files: [{ id: "file_02", name: "Invoice.pdf" }],
+          next_page_token: null,
+        }
+      );
     },
     async getFileContent() {
-      return options?.fileContentResult ?? {
-        file: { id: "file_01", name: "Proposal.docx" },
-        content: "Important document content",
-      };
+      return (
+        options?.fileContentResult ?? {
+          file: { id: "file_01", name: "Proposal.docx" },
+          content: "Important document content",
+        }
+      );
     },
   } as unknown as DriveContextService;
 }
@@ -401,136 +515,161 @@ function createFakeWhatsAppSetupService(options?: {
 }): WhatsAppSetupService {
   return {
     async setup(_workspaceId: string, connectionId: string) {
-      return options?.setupResult ?? {
-        connection_id: connectionId,
-        connection_status: "connected",
-        transport_mode: "meta_cloud_api",
-        pairing_status: null,
-        paired_identity_ref: null,
-        operational: {
-          state: "ready",
-          summary: "WhatsApp connection is ready.",
-          lastProbeAt: "2026-03-25T12:00:00Z",
-          blockingIssueCodes: [],
-        },
-        probe: null,
-        recovery_hints: [],
-      };
-    },
-    async getStatus(_workspaceId: string, connectionId: string) {
-      return options?.statusResult ?? {
-        connection_id: connectionId,
-        connection_status: "connected",
-        transport_mode: "meta_cloud_api",
-        pairing_status: null,
-        paired_identity_ref: null,
-        operational: {
-          state: "ready",
-          summary: "WhatsApp connection is ready.",
-          lastProbeAt: "2026-03-25T12:05:00Z",
-          blockingIssueCodes: [],
-        },
-        probe: null,
-        recovery_hints: [],
-      };
-    },
-    async probe() {
-      return options?.probeResult ?? {
-        ok: true,
-        checkedAt: "2026-03-25T12:10:00Z",
-        summary: "WhatsApp API is reachable.",
-        issues: [],
-        displayName: "Acme Support",
-      };
-    },
-    async setTransportMode(_workspaceId: string, connectionId: string, transportMode: string) {
-      return options?.transportModeResult ?? {
-        connection_id: connectionId,
-        connection_status: "connected",
-        transport_mode: transportMode,
-        pairing_status: transportMode === "openclaw_pairing" ? "unpaired" : null,
-        paired_identity_ref: null,
-        operational: {
-          state: "configured",
-          summary: "Transport mode updated.",
-          lastProbeAt: null,
-          blockingIssueCodes: [],
-        },
-        probe: null,
-        recovery_hints: [],
-      };
-    },
-    async startPairing(_workspaceId: string, connectionId: string) {
-      return options?.startPairingResult ?? {
-        pairing: {
-          qr_data_url: "data:image/png;base64,abc123",
-          message: "Scan the QR code to pair.",
-          account_id: null,
-        },
-        status: {
+      return (
+        options?.setupResult ?? {
           connection_id: connectionId,
           connection_status: "connected",
-          transport_mode: "openclaw_pairing",
-          pairing_status: "unpaired",
+          transport_mode: "meta_cloud_api",
+          pairing_status: null,
+          paired_identity_ref: null,
+          operational: {
+            state: "ready",
+            summary: "WhatsApp connection is ready.",
+            lastProbeAt: "2026-03-25T12:00:00Z",
+            blockingIssueCodes: [],
+          },
+          probe: null,
+          recovery_hints: [],
+        }
+      );
+    },
+    async getStatus(_workspaceId: string, connectionId: string) {
+      return (
+        options?.statusResult ?? {
+          connection_id: connectionId,
+          connection_status: "connected",
+          transport_mode: "meta_cloud_api",
+          pairing_status: null,
+          paired_identity_ref: null,
+          operational: {
+            state: "ready",
+            summary: "WhatsApp connection is ready.",
+            lastProbeAt: "2026-03-25T12:05:00Z",
+            blockingIssueCodes: [],
+          },
+          probe: null,
+          recovery_hints: [],
+        }
+      );
+    },
+    async probe() {
+      return (
+        options?.probeResult ?? {
+          ok: true,
+          checkedAt: "2026-03-25T12:10:00Z",
+          summary: "WhatsApp API is reachable.",
+          issues: [],
+          displayName: "Acme Support",
+        }
+      );
+    },
+    async setTransportMode(
+      _workspaceId: string,
+      connectionId: string,
+      transportMode: string,
+    ) {
+      return (
+        options?.transportModeResult ?? {
+          connection_id: connectionId,
+          connection_status: "connected",
+          transport_mode: transportMode,
+          pairing_status:
+            transportMode === "openclaw_pairing" ? "unpaired" : null,
           paired_identity_ref: null,
           operational: {
             state: "configured",
-            summary: "Waiting for pairing.",
+            summary: "Transport mode updated.",
             lastProbeAt: null,
             blockingIssueCodes: [],
           },
           probe: null,
           recovery_hints: [],
-        },
-      };
+        }
+      );
+    },
+    async startPairing(_workspaceId: string, connectionId: string) {
+      return (
+        options?.startPairingResult ?? {
+          pairing: {
+            qr_data_url: "data:image/png;base64,abc123",
+            message: "Scan the QR code to pair.",
+            account_id: null,
+          },
+          status: {
+            connection_id: connectionId,
+            connection_status: "connected",
+            transport_mode: "openclaw_pairing",
+            pairing_status: "unpaired",
+            paired_identity_ref: null,
+            operational: {
+              state: "configured",
+              summary: "Waiting for pairing.",
+              lastProbeAt: null,
+              blockingIssueCodes: [],
+            },
+            probe: null,
+            recovery_hints: [],
+          },
+        }
+      );
     },
     async waitForPairing(_workspaceId: string, connectionId: string) {
-      return options?.waitForPairingResult ?? {
-        pairing: {
-          connected: true,
-          message: "Device paired.",
-          account_id: "acct_wa_01",
-        },
-        status: {
-          connection_id: connectionId,
-          connection_status: "connected",
-          transport_mode: "openclaw_pairing",
-          pairing_status: "paired",
-          paired_identity_ref: "acct_wa_01",
-          operational: {
-            state: "ready",
-            summary: "WhatsApp pairing is complete.",
-            lastProbeAt: "2026-03-25T12:15:00Z",
-            blockingIssueCodes: [],
+      return (
+        options?.waitForPairingResult ?? {
+          pairing: {
+            connected: true,
+            message: "Device paired.",
+            account_id: "acct_wa_01",
           },
-          probe: null,
-          recovery_hints: [],
-        },
-      };
+          status: {
+            connection_id: connectionId,
+            connection_status: "connected",
+            transport_mode: "openclaw_pairing",
+            pairing_status: "paired",
+            paired_identity_ref: "acct_wa_01",
+            operational: {
+              state: "ready",
+              summary: "WhatsApp pairing is complete.",
+              lastProbeAt: "2026-03-25T12:15:00Z",
+              blockingIssueCodes: [],
+            },
+            probe: null,
+            recovery_hints: [],
+          },
+        }
+      );
     },
   } as unknown as WhatsAppSetupService;
 }
 
 function createFakeGmailPollingService(options?: {
-  pollResult?: Awaited<ReturnType<GmailPollingServiceContract["pollConnection"]>>;
+  pollResult?: Awaited<
+    ReturnType<GmailPollingServiceContract["pollConnection"]>
+  >;
 }): GmailPollingServiceContract {
   return {
-    async pollConnection(workspaceId: string, connectionId: string, trigger: "manual" | "background") {
-      return options?.pollResult ?? {
-        connection_id: connectionId,
-        workspace_id: workspaceId,
-        trigger,
-        watch_status: "polling",
-        bootstrapped: true,
-        processed_messages: 2,
-        created_results: 1,
-        deduplicated_results: 1,
-        attached_worker_ids: ["wkr_followup_01"],
-        last_checked_at: "2026-03-25T12:20:00Z",
-        last_success_at: "2026-03-25T12:20:00Z",
-        last_message_at: "2026-03-25T12:19:30Z",
-        last_error: null,
-      };
+    async pollConnection(
+      workspaceId: string,
+      connectionId: string,
+      trigger: "manual" | "background",
+    ) {
+      return (
+        options?.pollResult ?? {
+          connection_id: connectionId,
+          workspace_id: workspaceId,
+          trigger,
+          watch_status: "polling",
+          bootstrapped: true,
+          processed_messages: 2,
+          created_results: 1,
+          deduplicated_results: 1,
+          attached_worker_ids: ["wkr_followup_01"],
+          last_checked_at: "2026-03-25T12:20:00Z",
+          last_success_at: "2026-03-25T12:20:00Z",
+          last_message_at: "2026-03-25T12:19:30Z",
+          last_error: null,
+        }
+      );
     },
     async pollEligibleConnections() {
       return [];
@@ -556,7 +695,11 @@ class FakeAuthService implements AuthServiceContract {
     this.bootstrapped = true;
     const sessionToken = "bootstrap-session-token";
     const session = {
-      user: { id: "usr_admin", email: "admin@example.com", display_name: "Admin" },
+      user: {
+        id: "usr_admin",
+        email: "admin@example.com",
+        display_name: "Admin",
+      },
       workspace: { id: "ws_1", slug: "acme", name: "Acme" },
       membership: { role: "admin" as const },
     };
@@ -642,10 +785,17 @@ class InMemoryWorkerStore implements WorkerStore {
     return this.items.filter((w) => w.workspaceId === workspaceId);
   }
   async findById(workspaceId: string, id: string) {
-    return this.items.find((w) => w.workspaceId === workspaceId && w.id === id) ?? null;
+    return (
+      this.items.find((w) => w.workspaceId === workspaceId && w.id === id) ??
+      null
+    );
   }
   async findBySlug(workspaceId: string, slug: string) {
-    return this.items.find((w) => w.workspaceId === workspaceId && w.slug === slug) ?? null;
+    return (
+      this.items.find(
+        (w) => w.workspaceId === workspaceId && w.slug === slug,
+      ) ?? null
+    );
   }
   async create(input: StoredWorker) {
     this.items.push(input);
@@ -672,12 +822,22 @@ class InMemoryWorkItemStore implements WorkItemStore {
     return this.items.filter((w) => w.workerId === workerId);
   }
   async findById(workspaceId: string, id: string) {
-    return this.items.find((w) => w.workspaceId === workspaceId && w.id === id) ?? null;
+    return (
+      this.items.find((w) => w.workspaceId === workspaceId && w.id === id) ??
+      null
+    );
   }
-  async findBySourceInboxItemId(workspaceId: string, sourceInboxItemId: string) {
-    return this.items.find(
-      (w) => w.workspaceId === workspaceId && w.sourceInboxItemId === sourceInboxItemId,
-    ) ?? null;
+  async findBySourceInboxItemId(
+    workspaceId: string,
+    sourceInboxItemId: string,
+  ) {
+    return (
+      this.items.find(
+        (w) =>
+          w.workspaceId === workspaceId &&
+          w.sourceInboxItemId === sourceInboxItemId,
+      ) ?? null
+    );
   }
   async create(input: StoredWorkItem) {
     this.items.push(input);
@@ -701,16 +861,29 @@ class InMemoryInboxItemStore implements InboxItemStore {
     return this.items.filter((i) => i.workspaceId === workspaceId);
   }
   async listOpen(workspaceId: string) {
-    return this.items.filter((i) => i.workspaceId === workspaceId && i.state === "open");
+    return this.items.filter(
+      (i) => i.workspaceId === workspaceId && i.state === "open",
+    );
   }
   async findById(workspaceId: string, id: string) {
-    return this.items.find((i) => i.workspaceId === workspaceId && i.id === id) ?? null;
+    return (
+      this.items.find((i) => i.workspaceId === workspaceId && i.id === id) ??
+      null
+    );
   }
   async findByReviewId(workspaceId: string, reviewId: string) {
-    return this.items.find((i) => i.workspaceId === workspaceId && i.reviewId === reviewId) ?? null;
+    return (
+      this.items.find(
+        (i) => i.workspaceId === workspaceId && i.reviewId === reviewId,
+      ) ?? null
+    );
   }
   async findByWorkItemId(workspaceId: string, workItemId: string) {
-    return this.items.find((i) => i.workspaceId === workspaceId && i.workItemId === workItemId) ?? null;
+    return (
+      this.items.find(
+        (i) => i.workspaceId === workspaceId && i.workItemId === workItemId,
+      ) ?? null
+    );
   }
   async create(input: StoredInboxItem) {
     this.items.push(input);
@@ -734,10 +907,15 @@ class InMemoryReviewStore implements ReviewStore {
     return this.items.filter((r) => r.workspaceId === workspaceId);
   }
   async listPending(workspaceId: string) {
-    return this.items.filter((r) => r.workspaceId === workspaceId && r.status === "pending");
+    return this.items.filter(
+      (r) => r.workspaceId === workspaceId && r.status === "pending",
+    );
   }
   async findById(workspaceId: string, id: string) {
-    return this.items.find((r) => r.workspaceId === workspaceId && r.id === id) ?? null;
+    return (
+      this.items.find((r) => r.workspaceId === workspaceId && r.id === id) ??
+      null
+    );
   }
   async create(input: StoredReview) {
     this.items.push(input);
@@ -758,7 +936,12 @@ class InMemoryReviewDecisionStore implements ReviewDecisionStore {
   private items: StoredReviewDecision[] = [];
 
   async findByReviewId(workspaceId: string, reviewId: string) {
-    return this.items.find((item) => item.workspaceId === workspaceId && item.reviewId === reviewId) ?? null;
+    return (
+      this.items.find(
+        (item) =>
+          item.workspaceId === workspaceId && item.reviewId === reviewId,
+      ) ?? null
+    );
   }
 
   async create(input: StoredReviewDecision) {
@@ -785,13 +968,19 @@ class InMemoryActivityEventStore implements ActivityEventStore {
     return input;
   }
 
-  async findByReviewResult(workspaceId: string, reviewId: string, resultKind: string) {
-    return this.items.find(
-      (event) =>
-        event.workspaceId === workspaceId
-        && event.reviewId === reviewId
-        && event.resultKind === resultKind,
-    ) ?? null;
+  async findByReviewResult(
+    workspaceId: string,
+    reviewId: string,
+    resultKind: string,
+  ) {
+    return (
+      this.items.find(
+        (event) =>
+          event.workspaceId === workspaceId &&
+          event.reviewId === reviewId &&
+          event.resultKind === resultKind,
+      ) ?? null
+    );
   }
 
   get all() {
@@ -809,7 +998,10 @@ class InMemoryConnectionStore implements ConnectionStore {
     return this.items.filter((c) => c.workspaceId === workspaceId);
   }
   async findById(workspaceId: string, id: string) {
-    return this.items.find((c) => c.workspaceId === workspaceId && c.id === id) ?? null;
+    return (
+      this.items.find((c) => c.workspaceId === workspaceId && c.id === id) ??
+      null
+    );
   }
   async create(input: StoredConnection) {
     this.items.push(input);
@@ -834,7 +1026,11 @@ class InMemoryInputRouteStore implements InputRouteStore {
   }
 
   async findById(workspaceId: string, id: string) {
-    return this.items.find((route) => route.workspaceId === workspaceId && route.id === id) ?? null;
+    return (
+      this.items.find(
+        (route) => route.workspaceId === workspaceId && route.id === id,
+      ) ?? null
+    );
   }
 
   async update(id: string, input: Partial<StoredInputRoute>) {
@@ -858,11 +1054,20 @@ class InMemoryContactStore implements ContactStore {
   }
 
   async findById(workspaceId: string, id: string) {
-    return this.items.find((contact) => contact.workspaceId === workspaceId && contact.id === id) ?? null;
+    return (
+      this.items.find(
+        (contact) => contact.workspaceId === workspaceId && contact.id === id,
+      ) ?? null
+    );
   }
 
   async findByEmail(workspaceId: string, email: string) {
-    return this.items.find((contact) => contact.workspaceId === workspaceId && contact.primaryEmail === email) ?? null;
+    return (
+      this.items.find(
+        (contact) =>
+          contact.workspaceId === workspaceId && contact.primaryEmail === email,
+      ) ?? null
+    );
   }
 
   async create(input: StoredContact) {
@@ -886,11 +1091,21 @@ class InMemoryAccountStore implements AccountStore {
   }
 
   async findById(workspaceId: string, id: string) {
-    return this.items.find((account) => account.workspaceId === workspaceId && account.id === id) ?? null;
+    return (
+      this.items.find(
+        (account) => account.workspaceId === workspaceId && account.id === id,
+      ) ?? null
+    );
   }
 
   async findByDomain(workspaceId: string, domain: string) {
-    return this.items.find((account) => account.workspaceId === workspaceId && account.primaryDomain === domain) ?? null;
+    return (
+      this.items.find(
+        (account) =>
+          account.workspaceId === workspaceId &&
+          account.primaryDomain === domain,
+      ) ?? null
+    );
   }
 
   async create(input: StoredAccount) {
@@ -914,7 +1129,11 @@ class InMemoryActionCapabilityStore implements ActionCapabilityStore {
   }
 
   async findById(workspaceId: string, id: string) {
-    return this.items.find((action) => action.workspaceId === workspaceId && action.id === id) ?? null;
+    return (
+      this.items.find(
+        (action) => action.workspaceId === workspaceId && action.id === id,
+      ) ?? null
+    );
   }
 
   async create(input: StoredActionCapability) {
@@ -951,13 +1170,26 @@ class InMemoryApprovalSurfaceIdentityStore implements ApprovalSurfaceIdentitySto
   }
 
   async findById(workspaceId: string, id: string) {
-    return this.items.find((item) => item.workspaceId === workspaceId && item.id === id) ?? null;
+    return (
+      this.items.find(
+        (item) => item.workspaceId === workspaceId && item.id === id,
+      ) ?? null
+    );
   }
 
-  async findByChannelAndUser(workspaceId: string, channel: StoredApprovalSurfaceIdentity["channel"], userId: string) {
-    return this.items.find(
-      (item) => item.workspaceId === workspaceId && item.channel === channel && item.userId === userId,
-    ) ?? null;
+  async findByChannelAndUser(
+    workspaceId: string,
+    channel: StoredApprovalSurfaceIdentity["channel"],
+    userId: string,
+  ) {
+    return (
+      this.items.find(
+        (item) =>
+          item.workspaceId === workspaceId &&
+          item.channel === channel &&
+          item.userId === userId,
+      ) ?? null
+    );
   }
 
   async findByChannelAndIdentity(
@@ -965,12 +1197,14 @@ class InMemoryApprovalSurfaceIdentityStore implements ApprovalSurfaceIdentitySto
     channel: StoredApprovalSurfaceIdentity["channel"],
     externalIdentity: string,
   ) {
-    return this.items.find(
-      (item) =>
-        item.workspaceId === workspaceId
-        && item.channel === channel
-        && item.externalIdentity === externalIdentity,
-    ) ?? null;
+    return (
+      this.items.find(
+        (item) =>
+          item.workspaceId === workspaceId &&
+          item.channel === channel &&
+          item.externalIdentity === externalIdentity,
+      ) ?? null
+    );
   }
 
   async create(input: StoredApprovalSurfaceIdentity) {
@@ -1007,7 +1241,11 @@ class FakeGmailValidator {
 }
 
 class FakeServiceAccountValidator {
-  async validateServiceAccount(input: { serviceAccountEmail: string; privateKey: string; targetMailbox: string }) {
+  async validateServiceAccount(input: {
+    serviceAccountEmail: string;
+    privateKey: string;
+    targetMailbox: string;
+  }) {
     if (input.privateKey === "bad-key") {
       throw new Error("Invalid service account key");
     }
@@ -1367,14 +1605,20 @@ describe("workspace read-model routes", () => {
       workItemService: new WorkItemService({ store: workItemStore }),
       inboxItemService: new InboxItemService({ store: inboxItemStore }),
       reviewService: new ReviewService({ store: reviewStore }),
-      reviewDecisionService: new ReviewDecisionService({ store: reviewDecisionStore }),
+      reviewDecisionService: new ReviewDecisionService({
+        store: reviewDecisionStore,
+      }),
       activityService: new ActivityService({ store: activityStore }),
       connectionService: new ConnectionService({ store: connectionStore }),
       inputRouteService: new InputRouteService({ store: inputRouteStore }),
       contactService: new ContactService({ store: contactStore }),
       accountService: new AccountService({ store: accountStore }),
-      actionCapabilityService: new ActionCapabilityService({ store: actionCapabilityStore }),
-      workspacePeopleService: new WorkspacePeopleService({ store: workspacePeopleStore }),
+      actionCapabilityService: new ActionCapabilityService({
+        store: actionCapabilityStore,
+      }),
+      workspacePeopleService: new WorkspacePeopleService({
+        store: workspacePeopleStore,
+      }),
       approvalSurfaceIdentityService: new ApprovalSurfaceIdentityService({
         store: approvalSurfaceIdentityStore,
       }),
@@ -1401,6 +1645,7 @@ describe("workspace read-model routes", () => {
   async function createApp() {
     return createControlPlaneApp({
       authService: fakeAuthService,
+      conversationRunService: new FakeConversationRunService(),
       workspaceReadModelServices: services,
       cookieSecret: "test-cookie-secret-that-is-long-enough",
       consoleOrigin: "http://localhost:3000",
@@ -1420,7 +1665,9 @@ describe("workspace read-model routes", () => {
         password: "password123",
       },
     });
-    const cookieHeader = serializeCookies(res.headers["set-cookie"] as string[]);
+    const cookieHeader = serializeCookies(
+      res.headers["set-cookie"] as string[],
+    );
     return {
       cookie: cookieHeader,
       csrfToken: res.json().csrf_token as string,
@@ -1503,7 +1750,9 @@ describe("workspace read-model routes", () => {
     const approvalToken = buildSlackApprovalToken({
       reviewId: input.reviewId,
       decision: input.decision,
-      ...(input.actorIdentity !== undefined ? { actorIdentity: input.actorIdentity } : {}),
+      ...(input.actorIdentity !== undefined
+        ? { actorIdentity: input.actorIdentity }
+        : {}),
     });
     const interactionPayload = JSON.stringify({
       type: "block_actions",
@@ -1511,14 +1760,21 @@ describe("workspace read-model routes", () => {
       actions: [
         {
           type: "button",
-          action_id: input.decision === "approved" ? "clawback_approve" : "clawback_deny",
+          action_id:
+            input.decision === "approved"
+              ? "clawback_approve"
+              : "clawback_deny",
           value: approvalToken,
         },
       ],
     });
     const rawBody = `payload=${encodeURIComponent(interactionPayload)}`;
     const timestamp = String(Math.floor(Date.now() / 1000));
-    const signature = signSlackInteraction("slack-signing-secret-test", timestamp, rawBody);
+    const signature = signSlackInteraction(
+      "slack-signing-secret-test",
+      timestamp,
+      rawBody,
+    );
 
     return app.inject({
       method: "POST",
@@ -1746,7 +2002,10 @@ describe("workspace read-model routes", () => {
 
   it("requires authentication for /api/workspace/today", async () => {
     const app = await createApp();
-    const res = await app.inject({ method: "GET", url: "/api/workspace/today" });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/workspace/today",
+    });
     expect(res.statusCode).toBe(401);
     await app.close();
   });
@@ -1768,7 +2027,10 @@ describe("workspace read-model routes", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.workers).toHaveLength(2);
-    expect(body.workers.map((w: any) => w.slug).sort()).toEqual(["client-follow-up", "proposal"]);
+    expect(body.workers.map((w: any) => w.slug).sort()).toEqual([
+      "client-follow-up",
+      "proposal",
+    ]);
 
     await app.close();
   });
@@ -1965,11 +2227,14 @@ describe("workspace read-model routes", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.connections).toHaveLength(2);
-    expect(body.connections.map((connection: any) => connection.provider).sort()).toEqual([
-      "gmail",
-      "smtp_relay",
-    ]);
-    expect(body.connections.every((connection: any) => connection.status === "connected")).toBe(true);
+    expect(
+      body.connections.map((connection: any) => connection.provider).sort(),
+    ).toEqual(["gmail", "smtp_relay"]);
+    expect(
+      body.connections.every(
+        (connection: any) => connection.status === "connected",
+      ),
+    ).toBe(true);
 
     await app.close();
   });
@@ -1995,7 +2260,9 @@ describe("workspace read-model routes", () => {
       "forward_email",
       "watched_inbox",
     ]);
-    const watchedRoute = body.input_routes.find((route: any) => route.kind === "watched_inbox");
+    const watchedRoute = body.input_routes.find(
+      (route: any) => route.kind === "watched_inbox",
+    );
     expect(watchedRoute.status).toBe("active");
 
     await app.close();
@@ -2054,7 +2321,9 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/input-routes?worker_id=wkr_followup_01",
       headers: { cookie: cookie.toString() },
     });
-    const watchedRoute = routeRes.json().input_routes.find((route: any) => route.kind === "watched_inbox");
+    const watchedRoute = routeRes
+      .json()
+      .input_routes.find((route: any) => route.kind === "watched_inbox");
     expect(watchedRoute.status).toBe("suggested");
 
     await app.close();
@@ -2108,7 +2377,9 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/input-routes?worker_id=wkr_followup_01",
       headers: { cookie: cookie.toString() },
     });
-    const watchedRoute = routeRes.json().input_routes.find((route: any) => route.kind === "watched_inbox");
+    const watchedRoute = routeRes
+      .json()
+      .input_routes.find((route: any) => route.kind === "watched_inbox");
     expect(watchedRoute.status).toBe("active");
 
     await app.close();
@@ -2235,7 +2506,11 @@ describe("workspace read-model routes", () => {
         "x-csrf-token": cookie.csrfToken,
       },
       payload: {
-        service_account_json: JSON.stringify({ type: "authorized_user", client_email: "x@y.com", private_key: "k" }),
+        service_account_json: JSON.stringify({
+          type: "authorized_user",
+          client_email: "x@y.com",
+          private_key: "k",
+        }),
         target_mailbox: "team@company.com",
       },
     });
@@ -2299,13 +2574,16 @@ describe("workspace read-model routes", () => {
     delete process.env.GOOGLE_CLIENT_SECRET;
 
     globalThis.fetch = async () =>
-      new Response(JSON.stringify({
-        access_token: "oauth-access-token",
-        refresh_token: "oauth-refresh-token",
-      }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+      new Response(
+        JSON.stringify({
+          access_token: "oauth-access-token",
+          refresh_token: "oauth-refresh-token",
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
 
     try {
       const app = await createApp();
@@ -2421,7 +2699,9 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/input-routes?worker_id=wkr_followup_01",
       headers: { cookie: cookie.toString() },
     });
-    const watchedRoute = routeRes.json().input_routes.find((route: any) => route.kind === "watched_inbox");
+    const watchedRoute = routeRes
+      .json()
+      .input_routes.find((route: any) => route.kind === "watched_inbox");
     expect(watchedRoute.status).toBe("suggested");
 
     await app.close();
@@ -2501,7 +2781,9 @@ describe("workspace read-model routes", () => {
         password: "password123",
       },
     });
-    const cookieHeader = serializeCookies(bootstrapRes.headers["set-cookie"] as string[]);
+    const cookieHeader = serializeCookies(
+      bootstrapRes.headers["set-cookie"] as string[],
+    );
     const csrfToken = bootstrapRes.json().csrf_token as string;
 
     for (const [token, ctx] of nonAdminAuth.sessions) {
@@ -3306,64 +3588,70 @@ describe("workspace read-model routes", () => {
   });
 
   it("reports SMTP env status and configures smtp_relay connections from env", async () => {
-    await withSmtpEnv({
-      host: "smtp.example.com",
-      port: "587",
-      username: "smtp-user",
-      password: "smtp-password",
-      fromAddress: "relay@example.com",
-    }, async () => {
-      const app = await createApp();
-      const cookie = await authenticate(app);
-
-      const statusRes = await app.inject({
-        method: "GET",
-        url: "/api/workspace/connections/conn_smtp_01/smtp-status",
-        headers: { cookie: cookie.toString() },
-      });
-
-      expect(statusRes.statusCode).toBe(200);
-      expect(statusRes.json()).toEqual({
-        connection_id: "conn_smtp_01",
-        status: "connected",
-        env_configured: true,
-        host_present: true,
-        port_present: true,
-        username_present: true,
-        password_present: true,
-        from_address_present: true,
-        from_address: "relay@example.com",
+    await withSmtpEnv(
+      {
         host: "smtp.example.com",
-        port: 587,
-      });
+        port: "587",
+        username: "smtp-user",
+        password: "smtp-password",
+        fromAddress: "relay@example.com",
+      },
+      async () => {
+        const app = await createApp();
+        const cookie = await authenticate(app);
 
-      const configureRes = await app.inject({
-        method: "POST",
-        url: "/api/workspace/connections/conn_smtp_01/smtp-configure",
-        headers: {
-          cookie: cookie.toString(),
-          "x-csrf-token": cookie.csrfToken,
-        },
-        payload: {},
-      });
+        const statusRes = await app.inject({
+          method: "GET",
+          url: "/api/workspace/connections/conn_smtp_01/smtp-status",
+          headers: { cookie: cookie.toString() },
+        });
 
-      expect(configureRes.statusCode).toBe(200);
-      expect(configureRes.json()).toMatchObject({
-        id: "conn_smtp_01",
-        provider: "smtp_relay",
-        status: "connected",
-      });
+        expect(statusRes.statusCode).toBe(200);
+        expect(statusRes.json()).toEqual({
+          connection_id: "conn_smtp_01",
+          status: "connected",
+          env_configured: true,
+          host_present: true,
+          port_present: true,
+          username_present: true,
+          password_present: true,
+          from_address_present: true,
+          from_address: "relay@example.com",
+          host: "smtp.example.com",
+          port: 587,
+        });
 
-      const stored = await services.connectionService.getStoredById("ws_1", "conn_smtp_01");
-      expect(stored.configJson).toMatchObject({
-        host: "smtp.example.com",
-        port: 587,
-        from: "relay@example.com",
-      });
-      expect(typeof stored.configJson?.configuredAt).toBe("string");
+        const configureRes = await app.inject({
+          method: "POST",
+          url: "/api/workspace/connections/conn_smtp_01/smtp-configure",
+          headers: {
+            cookie: cookie.toString(),
+            "x-csrf-token": cookie.csrfToken,
+          },
+          payload: {},
+        });
 
-      await app.close();
-    });
+        expect(configureRes.statusCode).toBe(200);
+        expect(configureRes.json()).toMatchObject({
+          id: "conn_smtp_01",
+          provider: "smtp_relay",
+          status: "connected",
+        });
+
+        const stored = await services.connectionService.getStoredById(
+          "ws_1",
+          "conn_smtp_01",
+        );
+        expect(stored.configJson).toMatchObject({
+          host: "smtp.example.com",
+          port: 587,
+          from: "relay@example.com",
+        });
+        expect(typeof stored.configJson?.configuredAt).toBe("string");
+
+        await app.close();
+      },
+    );
   });
 
   it("rejects smtp-configure when required SMTP env vars are missing", async () => {
@@ -3383,7 +3671,8 @@ describe("workspace read-model routes", () => {
 
       expect(configureRes.statusCode).toBe(400);
       expect(configureRes.json()).toEqual({
-        error: "SMTP environment variables are not fully configured. Set CLAWBACK_SMTP_HOST, CLAWBACK_SMTP_PORT, and CLAWBACK_SMTP_FROM_ADDRESS.",
+        error:
+          "SMTP environment variables are not fully configured. Set CLAWBACK_SMTP_HOST, CLAWBACK_SMTP_PORT, and CLAWBACK_SMTP_FROM_ADDRESS.",
         code: "smtp_env_not_configured",
       });
 
@@ -3507,10 +3796,13 @@ describe("workspace read-model routes", () => {
 
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () =>
-      new Response(JSON.stringify({ ok: true, channel: "C123456", ts: "1.0" }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+      new Response(
+        JSON.stringify({ ok: true, channel: "C123456", ts: "1.0" }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
 
     try {
       const app = await createApp();
@@ -3640,7 +3932,11 @@ describe("workspace read-model routes", () => {
     });
     const rawBody = `payload=${encodeURIComponent(interactionPayload)}`;
     const timestamp = String(Math.floor(Date.now() / 1000));
-    const signature = signSlackInteraction("slack-signing-secret-test", timestamp, rawBody);
+    const signature = signSlackInteraction(
+      "slack-signing-secret-test",
+      timestamp,
+      rawBody,
+    );
 
     const resolveRes = await app.inject({
       method: "POST",
@@ -3695,7 +3991,9 @@ describe("workspace read-model routes", () => {
     });
 
     expect(
-      activityStore.all.filter((event) => event.resultKind === "review_resolved_via_slack"),
+      activityStore.all.filter(
+        (event) => event.resultKind === "review_resolved_via_slack",
+      ),
     ).toHaveLength(1);
 
     await app.close();
@@ -3765,39 +4063,40 @@ describe("workspace read-model routes", () => {
     expect(slackWork.json().execution_status).toBe("completed");
     expect(webWork.json().execution_outcome_json.approved_via).toBe("web");
     expect(slackWork.json().execution_outcome_json.approved_via).toBe("slack");
-    expect(comparableReviewedSendOutcome(webWork.json().execution_outcome_json)).toEqual(
+    expect(
+      comparableReviewedSendOutcome(webWork.json().execution_outcome_json),
+    ).toEqual(
       comparableReviewedSendOutcome(slackWork.json().execution_outcome_json),
     );
 
     expect(reviewDecisionStore.all).toHaveLength(2);
-    expect(reviewDecisionStore.all.map((decision) => decision.surface).sort()).toEqual([
-      "slack",
-      "web",
-    ]);
+    expect(
+      reviewDecisionStore.all.map((decision) => decision.surface).sort(),
+    ).toEqual(["slack", "web"]);
 
     const activityRes = await app.inject({
       method: "GET",
       url: "/api/workspace/activity",
       headers: { cookie: cookie.toString() },
     });
-    const reviewApprovedEvents = activityRes.json().events.filter(
-      (event: any) => event.result_kind === "review_approved",
-    );
-    const workSentEvents = activityRes.json().events.filter(
-      (event: any) => event.result_kind === "work_item_sent",
-    );
-    const slackSurfaceEvents = activityRes.json().events.filter(
-      (event: any) => event.result_kind === "review_resolved_via_slack",
-    );
+    const reviewApprovedEvents = activityRes
+      .json()
+      .events.filter((event: any) => event.result_kind === "review_approved");
+    const workSentEvents = activityRes
+      .json()
+      .events.filter((event: any) => event.result_kind === "work_item_sent");
+    const slackSurfaceEvents = activityRes
+      .json()
+      .events.filter(
+        (event: any) => event.result_kind === "review_resolved_via_slack",
+      );
 
-    expect(reviewApprovedEvents.map((event: any) => event.review_id).sort()).toEqual([
-      "rev_01",
-      "rev_slack_compare_01",
-    ]);
-    expect(workSentEvents.map((event: any) => event.work_item_id).sort()).toEqual([
-      "wi_draft_01",
-      "wi_draft_slack_compare_01",
-    ]);
+    expect(
+      reviewApprovedEvents.map((event: any) => event.review_id).sort(),
+    ).toEqual(["rev_01", "rev_slack_compare_01"]);
+    expect(
+      workSentEvents.map((event: any) => event.work_item_id).sort(),
+    ).toEqual(["wi_draft_01", "wi_draft_slack_compare_01"]);
     expect(slackSurfaceEvents).toHaveLength(1);
     expect(slackSurfaceEvents[0]?.review_id).toBe("rev_slack_compare_01");
 
@@ -3873,8 +4172,12 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/inbox",
       headers: { cookie: cookie.toString() },
     });
-    const webInbox = inboxRes.json().items.find((item: any) => item.id === "inb_review_01");
-    const slackInbox = inboxRes.json().items.find((item: any) => item.id === "inb_review_slack_deny_01");
+    const webInbox = inboxRes
+      .json()
+      .items.find((item: any) => item.id === "inb_review_01");
+    const slackInbox = inboxRes
+      .json()
+      .items.find((item: any) => item.id === "inb_review_slack_deny_01");
     expect(webInbox.state).toBe("resolved");
     expect(slackInbox.state).toBe("resolved");
 
@@ -3883,17 +4186,21 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/activity",
       headers: { cookie: cookie.toString() },
     });
-    const deniedEvents = activityRes.json().events.filter(
-      (event: any) => event.result_kind === "review_denied",
-    );
-    const slackSurfaceEvents = activityRes.json().events.filter(
-      (event: any) => event.result_kind === "review_resolved_via_slack",
-    );
+    const deniedEvents = activityRes
+      .json()
+      .events.filter((event: any) => event.result_kind === "review_denied");
+    const slackSurfaceEvents = activityRes
+      .json()
+      .events.filter(
+        (event: any) => event.result_kind === "review_resolved_via_slack",
+      );
     expect(deniedEvents.map((event: any) => event.review_id).sort()).toEqual([
       "rev_01",
       "rev_slack_deny_01",
     ]);
-    expect(deniedEvents.every((event: any) => event.summary === null)).toBe(true);
+    expect(deniedEvents.every((event: any) => event.summary === null)).toBe(
+      true,
+    );
     expect(slackSurfaceEvents).toHaveLength(1);
     expect(slackSurfaceEvents[0]?.review_id).toBe("rev_slack_deny_01");
 
@@ -3963,15 +4270,17 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/activity",
       headers: { cookie: cookie.toString() },
     });
-    const approvedEvents = activityRes.json().events.filter(
-      (event: any) => event.result_kind === "review_approved",
-    );
-    const sentEvents = activityRes.json().events.filter(
-      (event: any) => event.result_kind === "work_item_sent",
-    );
-    const slackSurfaceEvents = activityRes.json().events.filter(
-      (event: any) => event.result_kind === "review_resolved_via_slack",
-    );
+    const approvedEvents = activityRes
+      .json()
+      .events.filter((event: any) => event.result_kind === "review_approved");
+    const sentEvents = activityRes
+      .json()
+      .events.filter((event: any) => event.result_kind === "work_item_sent");
+    const slackSurfaceEvents = activityRes
+      .json()
+      .events.filter(
+        (event: any) => event.result_kind === "review_resolved_via_slack",
+      );
     expect(approvedEvents).toHaveLength(1);
     expect(sentEvents).toHaveLength(1);
     expect(slackSurfaceEvents).toHaveLength(0);
@@ -4047,7 +4356,9 @@ describe("workspace read-model routes", () => {
     expect(againRes.json().already_resolved).toBe(true);
     expect(reviewDecisionStore.all).toHaveLength(1);
     expect(
-      activityStore.all.filter((event) => event.resultKind === "review_resolved_via_whatsapp"),
+      activityStore.all.filter(
+        (event) => event.resultKind === "review_resolved_via_whatsapp",
+      ),
     ).toHaveLength(1);
 
     await app.close();
@@ -4116,14 +4427,15 @@ describe("workspace read-model routes", () => {
 
   it("creates and approves a reviewed external workflow handoff exactly once", async () => {
     let executionCount = 0;
-    services.reviewedExternalWorkflowExecutor = createFakeReviewedExternalWorkflowExecutor({
-      onRun: () => {
-        executionCount += 1;
-      },
-      responseStatusCode: 202,
-      responseSummary: "Workflow accepted by n8n.",
-      backendReference: "exec_n8n_01",
-    });
+    services.reviewedExternalWorkflowExecutor =
+      createFakeReviewedExternalWorkflowExecutor({
+        onRun: () => {
+          executionCount += 1;
+        },
+        responseStatusCode: 202,
+        responseSummary: "Workflow accepted by n8n.",
+        backendReference: "exec_n8n_01",
+      });
 
     await connectionStore.create({
       id: "conn_n8n_01",
@@ -4255,8 +4567,9 @@ describe("workspace read-model routes", () => {
     });
     const handoffEvent = activityRes
       .json()
-      .events
-      .find((event: any) => event.result_kind === "external_workflow_handed_off");
+      .events.find(
+        (event: any) => event.result_kind === "external_workflow_handed_off",
+      );
     expect(handoffEvent).toBeTruthy();
     expect(handoffEvent.work_item_id).toBe("wi_action_plan_01");
 
@@ -4265,19 +4578,20 @@ describe("workspace read-model routes", () => {
 
   it("records external workflow handoff failures without ambiguous retries", async () => {
     let executionCount = 0;
-    services.reviewedExternalWorkflowExecutor = createFakeReviewedExternalWorkflowExecutor({
-      onRun: () => {
-        executionCount += 1;
-      },
-      failWith: new ReviewedExternalWorkflowExecutionError(
-        "n8n workflow handoff failed: unauthorized",
-        {
-          responseStatusCode: 401,
-          responseSummary: "unauthorized",
-          backendReference: null,
+    services.reviewedExternalWorkflowExecutor =
+      createFakeReviewedExternalWorkflowExecutor({
+        onRun: () => {
+          executionCount += 1;
         },
-      ),
-    });
+        failWith: new ReviewedExternalWorkflowExecutionError(
+          "n8n workflow handoff failed: unauthorized",
+          {
+            responseStatusCode: 401,
+            responseSummary: "unauthorized",
+            backendReference: null,
+          },
+        ),
+      });
 
     await connectionStore.create({
       id: "conn_n8n_01",
@@ -4455,7 +4769,9 @@ describe("workspace read-model routes", () => {
         backend_reference: "exec_n8n_01",
       },
     });
-    expect((stored?.executionOutcomeJson as any).callback_result.ignored_raw_detail).toBeUndefined();
+    expect(
+      (stored?.executionOutcomeJson as any).callback_result.ignored_raw_detail,
+    ).toBeUndefined();
 
     const callbackEvent = activityStore.all.find(
       (event) => event.resultKind === "external_workflow_callback_succeeded",
@@ -4492,7 +4808,9 @@ describe("workspace read-model routes", () => {
     const stored = await workItemStore.findById("ws_1", "wi_n8n_callback_01");
     expect((stored?.executionOutcomeJson as any).callback_result).toBeNull();
     expect(
-      activityStore.all.some((event) => event.resultKind.startsWith("external_workflow_callback_")),
+      activityStore.all.some((event) =>
+        event.resultKind.startsWith("external_workflow_callback_"),
+      ),
     ).toBe(false);
 
     await app.close();
@@ -4606,7 +4924,9 @@ describe("workspace read-model routes", () => {
     const stored = await workItemStore.findById("ws_1", "wi_n8n_callback_01");
     expect((stored?.executionOutcomeJson as any).callback_result).toBeNull();
     expect(
-      activityStore.all.some((event) => event.resultKind.startsWith("external_workflow_callback_")),
+      activityStore.all.some((event) =>
+        event.resultKind.startsWith("external_workflow_callback_"),
+      ),
     ).toBe(false);
 
     await app.close();
@@ -4659,7 +4979,9 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/inbox",
       headers: { cookie: cookie.toString() },
     });
-    const reviewInboxItem = inboxRes.json().items.find((i: any) => i.id === "inb_review_01");
+    const reviewInboxItem = inboxRes
+      .json()
+      .items.find((i: any) => i.id === "inb_review_01");
     expect(reviewInboxItem.state).toBe("resolved");
 
     // Verify activity event was created
@@ -4669,8 +4991,12 @@ describe("workspace read-model routes", () => {
       headers: { cookie: cookie.toString() },
     });
     const events = activityRes.json().events;
-    const approvedEvent = events.find((e: any) => e.result_kind === "review_approved");
-    const sentEvent = events.find((e: any) => e.result_kind === "work_item_sent");
+    const approvedEvent = events.find(
+      (e: any) => e.result_kind === "review_approved",
+    );
+    const sentEvent = events.find(
+      (e: any) => e.result_kind === "work_item_sent",
+    );
     expect(approvedEvent).toBeTruthy();
     expect(approvedEvent.review_id).toBe("rev_01");
     expect(approvedEvent.work_item_id).toBe("wi_draft_01");
@@ -4713,7 +5039,9 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/inbox",
       headers: { cookie: cookie.toString() },
     });
-    const reviewInboxItem = inboxRes.json().items.find((i: any) => i.id === "inb_review_01");
+    const reviewInboxItem = inboxRes
+      .json()
+      .items.find((i: any) => i.id === "inb_review_01");
     expect(reviewInboxItem.state).toBe("resolved");
 
     // Verify activity event with denied kind
@@ -4722,7 +5050,9 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/activity",
       headers: { cookie: cookie.toString() },
     });
-    const deniedEvent = activityRes.json().events.find((e: any) => e.result_kind === "review_denied");
+    const deniedEvent = activityRes
+      .json()
+      .events.find((e: any) => e.result_kind === "review_denied");
     expect(deniedEvent).toBeTruthy();
     expect(deniedEvent.summary).toBe("Not ready to send");
 
@@ -4765,12 +5095,12 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/activity",
       headers: { cookie: cookie.toString() },
     });
-    const approvedEvents = activityRes.json().events.filter(
-      (e: any) => e.result_kind === "review_approved",
-    );
-    const sentEvents = activityRes.json().events.filter(
-      (e: any) => e.result_kind === "work_item_sent",
-    );
+    const approvedEvents = activityRes
+      .json()
+      .events.filter((e: any) => e.result_kind === "review_approved");
+    const sentEvents = activityRes
+      .json()
+      .events.filter((e: any) => e.result_kind === "work_item_sent");
     expect(approvedEvents).toHaveLength(1);
     expect(sentEvents).toHaveLength(1);
 
@@ -4783,7 +5113,8 @@ describe("workspace read-model routes", () => {
       workspaceId: "ws_1",
       kind: "review",
       title: "Route suggested: Proposal request from Globex",
-      summary: "Client Follow-Up suggests routing this proposal request to Proposal.",
+      summary:
+        "Client Follow-Up suggests routing this proposal request to Proposal.",
       assigneeIds: ["usr_admin"],
       workerId: "wkr_followup_01",
       workItemId: null,
@@ -4819,10 +5150,16 @@ describe("workspace read-model routes", () => {
 
     expect(first.statusCode).toBe(200);
     expect(first.json().already_confirmed).toBe(false);
-    expect(first.json().destination_work_item.worker_id).toBe("wkr_proposal_01");
+    expect(first.json().destination_work_item.worker_id).toBe(
+      "wkr_proposal_01",
+    );
     expect(first.json().destination_work_item.kind).toBe("proposal_draft");
-    expect(first.json().destination_work_item.source_inbox_item_id).toBe("inb_route_01");
-    expect(first.json().destination_inbox_item.work_item_id).toBe(first.json().destination_work_item.id);
+    expect(first.json().destination_work_item.source_inbox_item_id).toBe(
+      "inb_route_01",
+    );
+    expect(first.json().destination_inbox_item.work_item_id).toBe(
+      first.json().destination_work_item.id,
+    );
 
     const second = await app.inject({
       method: "POST",
@@ -4836,39 +5173,52 @@ describe("workspace read-model routes", () => {
 
     expect(second.statusCode).toBe(200);
     expect(second.json().already_confirmed).toBe(true);
-    expect(second.json().destination_work_item.id).toBe(first.json().destination_work_item.id);
+    expect(second.json().destination_work_item.id).toBe(
+      first.json().destination_work_item.id,
+    );
 
     const inboxRes = await app.inject({
       method: "GET",
       url: "/api/workspace/inbox",
       headers: { cookie: cookie.toString() },
     });
-    const originInboxItem = inboxRes.json().items.find((item: any) => item.id === "inb_route_01");
+    const originInboxItem = inboxRes
+      .json()
+      .items.find((item: any) => item.id === "inb_route_01");
     expect(originInboxItem.state).toBe("resolved");
-    expect(originInboxItem.work_item_id).toBe(first.json().destination_work_item.id);
+    expect(originInboxItem.work_item_id).toBe(
+      first.json().destination_work_item.id,
+    );
 
     const activityRes = await app.inject({
       method: "GET",
       url: "/api/workspace/activity",
       headers: { cookie: cookie.toString() },
     });
-    const routeEvents = activityRes.json().events.filter(
-      (event: any) => event.result_kind === "route_handoff_confirmed",
-    );
+    const routeEvents = activityRes
+      .json()
+      .events.filter(
+        (event: any) => event.result_kind === "route_handoff_confirmed",
+      );
     expect(routeEvents).toHaveLength(1);
-    expect(routeEvents[0]!.work_item_id).toBe(first.json().destination_work_item.id);
+    expect(routeEvents[0]!.work_item_id).toBe(
+      first.json().destination_work_item.id,
+    );
 
     await app.close();
   });
 
   it("confirm-route: leaves unsafe suggestions reviewable without creating downstream work", async () => {
-    await services.workerService.update("ws_1", "wkr_proposal_01", { status: "paused" });
+    await services.workerService.update("ws_1", "wkr_proposal_01", {
+      status: "paused",
+    });
     await inboxItemStore.create({
       id: "inb_route_unsafe_01",
       workspaceId: "ws_1",
       kind: "review",
       title: "Route suggested: Proposal request from Globex",
-      summary: "Client Follow-Up suggests routing this proposal request to Proposal.",
+      summary:
+        "Client Follow-Up suggests routing this proposal request to Proposal.",
       assigneeIds: ["usr_admin"],
       workerId: "wkr_followup_01",
       workItemId: null,
@@ -4910,7 +5260,9 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/inbox",
       headers: { cookie: cookie.toString() },
     });
-    const originInboxItem = inboxRes.json().items.find((item: any) => item.id === "inb_route_unsafe_01");
+    const originInboxItem = inboxRes
+      .json()
+      .items.find((item: any) => item.id === "inb_route_unsafe_01");
     expect(originInboxItem.state).toBe("open");
     expect(originInboxItem.work_item_id).toBeNull();
 
@@ -4919,7 +5271,13 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/work",
       headers: { cookie: cookie.toString() },
     });
-    expect(workRes.json().work_items.filter((item: any) => item.source_inbox_item_id === "inb_route_unsafe_01")).toHaveLength(0);
+    expect(
+      workRes
+        .json()
+        .work_items.filter(
+          (item: any) => item.source_inbox_item_id === "inb_route_unsafe_01",
+        ),
+    ).toHaveLength(0);
 
     await app.close();
   });
@@ -5059,7 +5417,9 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/inbox",
       headers: { cookie: cookie.toString() },
     });
-    const reviewInboxItem = inboxRes.json().items.find((i: any) => i.id === "inb_review_01");
+    const reviewInboxItem = inboxRes
+      .json()
+      .items.find((i: any) => i.id === "inb_review_01");
     expect(reviewInboxItem.state).toBe("resolved");
 
     const activityRes = await app.inject({
@@ -5067,12 +5427,12 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/activity",
       headers: { cookie: cookie.toString() },
     });
-    const approvedEvents = activityRes.json().events.filter(
-      (e: any) => e.result_kind === "review_approved",
-    );
-    const sentEvents = activityRes.json().events.filter(
-      (e: any) => e.result_kind === "work_item_sent",
-    );
+    const approvedEvents = activityRes
+      .json()
+      .events.filter((e: any) => e.result_kind === "review_approved");
+    const sentEvents = activityRes
+      .json()
+      .events.filter((e: any) => e.result_kind === "work_item_sent");
     expect(approvedEvents).toHaveLength(1);
     expect(sentEvents).toHaveLength(1);
 
@@ -5116,7 +5476,8 @@ describe("workspace read-model routes", () => {
       expect.arrayContaining([
         expect.objectContaining({
           kind: "forward_email",
-          capability_note: "Parses forwarded threads and extracts action items.",
+          capability_note:
+            "Parses forwarded threads and extracts action items.",
         }),
         expect.objectContaining({
           kind: "watched_inbox",
@@ -5191,7 +5552,9 @@ describe("workspace read-model routes", () => {
     });
     expect(packsRes.statusCode).toBe(200);
 
-    const registryPackIds = registryBody.worker_packs.map((pack: any) => pack.worker_pack_id);
+    const registryPackIds = registryBody.worker_packs.map(
+      (pack: any) => pack.worker_pack_id,
+    );
     const listedPackIds = packsRes.json().packs.map((pack: any) => pack.id);
     for (const packId of listedPackIds) {
       expect(registryPackIds).toContain(packId);
@@ -5470,6 +5833,116 @@ describe("workspace read-model routes", () => {
     await app.close();
   });
 
+  it("runs a sample forwarded email through a worker-scoped demo route", async () => {
+    const capturedPayload: { current: { to: string; subject: string } | null } =
+      {
+        current: null,
+      };
+    services.inboundEmailService = {
+      async processInboundEmail(payload) {
+        capturedPayload.current = {
+          to: payload.to,
+          subject: payload.subject,
+        };
+        return {
+          source_event_id: "src_demo_01",
+          worker_id: "wkr_followup_01",
+          workspace_id: "ws_1",
+          deduplicated: false,
+          work_item_id: "wrk_demo_01",
+          inbox_item_id: "inb_demo_01",
+          review_id: "rev_demo_01",
+        };
+      },
+    };
+
+    const app = await createApp();
+    const cookie = await authenticate(app);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/workspace/workers/wkr_followup_01/demo/forward-email",
+      headers: {
+        cookie: cookie.toString(),
+        "x-csrf-token": cookie.csrfToken,
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({
+      scenario: "forward_email_sample",
+      worker_id: "wkr_followup_01",
+      route_id: "rte_forward_01",
+      source_event_id: "src_demo_01",
+      work_item_id: "wrk_demo_01",
+      inbox_item_id: "inb_demo_01",
+      review_id: "rev_demo_01",
+    });
+    expect(capturedPayload.current).not.toBeNull();
+    if (!capturedPayload.current) {
+      throw new Error("expected captured inbound email payload");
+    }
+    expect(capturedPayload.current.to).toBe(
+      "followup-acme@inbound.clawback.dev",
+    );
+    expect(capturedPayload.current.subject).toBe("Re: Q3 renewal discussion");
+
+    await app.close();
+  });
+
+  it("returns 409 when a worker is not active for demo traffic", async () => {
+    services.inboundEmailService = {
+      async processInboundEmail() {
+        throw new Error("should not run");
+      },
+    };
+    await services.workerService.update("ws_1", "wkr_followup_01", {
+      status: "paused",
+    });
+
+    const app = await createApp();
+    const cookie = await authenticate(app);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/workspace/workers/wkr_followup_01/demo/forward-email",
+      headers: {
+        cookie: cookie.toString(),
+        "x-csrf-token": cookie.csrfToken,
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("demo_worker_not_active");
+
+    await app.close();
+  });
+
+  it("returns 409 when a worker does not have a forward-email route ready for demo traffic", async () => {
+    services.inboundEmailService = {
+      async processInboundEmail() {
+        throw new Error("should not run");
+      },
+    };
+
+    const app = await createApp();
+    const cookie = await authenticate(app);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/workspace/workers/wkr_proposal_01/demo/forward-email",
+      headers: {
+        cookie: cookie.toString(),
+        "x-csrf-token": cookie.csrfToken,
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("demo_forward_email_not_ready");
+
+    await app.close();
+  });
+
   it("requires admin for PATCH /api/workspace/workers/:id", async () => {
     const nonAdminAuth = new FakeAuthService();
 
@@ -5491,7 +5964,9 @@ describe("workspace read-model routes", () => {
         password: "password123",
       },
     });
-    const cookieHeader = serializeCookies(bootstrapRes.headers["set-cookie"] as string[]);
+    const cookieHeader = serializeCookies(
+      bootstrapRes.headers["set-cookie"] as string[],
+    );
     const csrfToken = bootstrapRes.json().csrf_token as string;
 
     // Downgrade session to non-admin AFTER bootstrap (so the cookie resolves to a user session)
@@ -5545,7 +6020,9 @@ describe("workspace read-model routes", () => {
         password: "password123",
       },
     });
-    const cookieHeader = serializeCookies(bootstrapRes.headers["set-cookie"] as string[]);
+    const cookieHeader = serializeCookies(
+      bootstrapRes.headers["set-cookie"] as string[],
+    );
     const csrfToken = bootstrapRes.json().csrf_token as string;
 
     // Downgrade session to non-admin AFTER bootstrap
@@ -5651,7 +6128,9 @@ describe("workspace read-model routes", () => {
       },
     });
     expect(updateAccountRes.statusCode).toBe(200);
-    expect(updateAccountRes.json().handling_note).toBe("Escalate to success team");
+    expect(updateAccountRes.json().handling_note).toBe(
+      "Escalate to success team",
+    );
 
     const listAccountsRes = await app.inject({
       method: "GET",
@@ -5747,7 +6226,9 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/inbox",
       headers: { cookie: cookie.toString() },
     });
-    const reviewInboxItem = inboxRes.json().items.find((i: any) => i.id === "inb_review_01");
+    const reviewInboxItem = inboxRes
+      .json()
+      .items.find((i: any) => i.id === "inb_review_01");
     expect(reviewInboxItem.state).toBe("open");
 
     // Activity should include a send_failed event
@@ -5756,7 +6237,9 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/activity",
       headers: { cookie: cookie.toString() },
     });
-    const failedEvent = activityRes.json().events.find((e: any) => e.result_kind === "send_failed");
+    const failedEvent = activityRes
+      .json()
+      .events.find((e: any) => e.result_kind === "send_failed");
     expect(failedEvent).toBeTruthy();
     expect(failedEvent.summary).toBe("SMTP connection timeout");
 
@@ -5809,12 +6292,12 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/activity",
       headers: { cookie: cookie.toString() },
     });
-    const approvedEvents = activityRes.json().events.filter(
-      (e: any) => e.result_kind === "review_approved",
-    );
-    const deniedEvents = activityRes.json().events.filter(
-      (e: any) => e.result_kind === "review_denied",
-    );
+    const approvedEvents = activityRes
+      .json()
+      .events.filter((e: any) => e.result_kind === "review_approved");
+    const deniedEvents = activityRes
+      .json()
+      .events.filter((e: any) => e.result_kind === "review_denied");
     expect(approvedEvents).toHaveLength(1);
     expect(deniedEvents).toHaveLength(0);
 
@@ -5854,7 +6337,9 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/inbox",
       headers: { cookie: cookie.toString() },
     });
-    const reviewInboxItem = inboxRes.json().items.find((i: any) => i.id === "inb_review_01");
+    const reviewInboxItem = inboxRes
+      .json()
+      .items.find((i: any) => i.id === "inb_review_01");
     expect(reviewInboxItem.state).toBe("resolved");
 
     // Activity should have a review_denied event, no send events
@@ -5863,8 +6348,12 @@ describe("workspace read-model routes", () => {
       url: "/api/workspace/activity",
       headers: { cookie: cookie.toString() },
     });
-    const deniedEvent = activityRes.json().events.find((e: any) => e.result_kind === "review_denied");
-    const sentEvent = activityRes.json().events.find((e: any) => e.result_kind === "work_item_sent");
+    const deniedEvent = activityRes
+      .json()
+      .events.find((e: any) => e.result_kind === "review_denied");
+    const sentEvent = activityRes
+      .json()
+      .events.find((e: any) => e.result_kind === "work_item_sent");
     expect(deniedEvent).toBeTruthy();
     expect(deniedEvent.summary).toBe("Not appropriate");
     expect(sentEvent).toBeUndefined();

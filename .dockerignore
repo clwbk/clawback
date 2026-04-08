@@ -13,6 +13,9 @@ coverage
 **/coverage
 docs
 *.md
+!docs/
+!docs/guides/
+!docs/guides/*.md
 .env
 .env.*
 !.env.example

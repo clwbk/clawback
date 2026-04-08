@@ -5,16 +5,29 @@ interface AppShellProps {
   panel?: React.ReactNode;
   header?: React.ReactNode;
   children: React.ReactNode;
+  railExpanded?: boolean;
 }
 
-export function AppShell({ rail, panel, header, children }: AppShellProps) {
+export function AppShell({
+  rail,
+  panel,
+  header,
+  children,
+  railExpanded = false,
+}: AppShellProps) {
+  const layoutClassName = panel
+    ? railExpanded
+      ? "grid-cols-[240px_minmax(200px,240px)_1fr]"
+      : "grid-cols-[48px_minmax(200px,240px)_1fr]"
+    : railExpanded
+      ? "grid-cols-[240px_1fr]"
+      : "grid-cols-[48px_1fr]";
+
   return (
     <div
       className={[
-        "h-screen overflow-hidden bg-background text-foreground",
-        panel
-          ? "grid grid-cols-[48px_minmax(200px,240px)_1fr]"
-          : "grid grid-cols-[48px_1fr]",
+        "grid h-screen overflow-hidden bg-background text-foreground transition-[grid-template-columns] duration-200 ease-out",
+        layoutClassName,
       ].join(" ")}
     >
       {/* Icon rail */}

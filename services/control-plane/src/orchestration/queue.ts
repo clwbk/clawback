@@ -12,6 +12,7 @@ export class PgBossRunQueue implements RunQueue {
   async enqueueRun(job: typeof runExecuteJobSchema._output) {
     const parsed = runExecuteJobSchema.parse(job);
     await this.boss.send(RUN_EXECUTE_JOB_NAME, parsed, {
+      expireInSeconds: 5 * 60,
       retryLimit: 3,
     });
   }
@@ -19,7 +20,7 @@ export class PgBossRunQueue implements RunQueue {
   async enqueueConnectorSync(job: typeof connectorSyncJobExecuteSchema._output) {
     const parsed = connectorSyncJobExecuteSchema.parse(job);
     await this.boss.send(CONNECTOR_SYNC_JOB_NAME, parsed, {
-      expireInSeconds: 60 * 60,
+      expireInSeconds: 10 * 60,
       heartbeatSeconds: 60,
       retryLimit: 3,
     });

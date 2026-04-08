@@ -11,6 +11,7 @@ import { RunMetadata } from "./run-metadata";
 import type { ConversationDetail, RunRecord, RunEventRecord } from "@/lib/control-plane";
 import { extractText } from "@/hooks/use-run-stream";
 import { extractGovernedActionSummary } from "@/lib/run-governed-action";
+import { buildRunFailurePresentation } from "@/lib/run-failure";
 
 const SUGGESTION_CHIPS = [
   "What can you help me with?",
@@ -25,9 +26,13 @@ interface ChatThreadProps {
   runEventsById: Record<string, RunEventRecord[]>;
   assistantDrafts: Record<string, string>;
   streamTarget: { runId: string; conversationId: string } | null;
+  assistantName?: string | null;
+  hasSelectedConversation?: boolean;
   isAdmin?: boolean;
   loading?: boolean;
   onSuggestion?: (text: string) => void;
+  onCreateThread?: (() => void) | undefined;
+  suggestionChips?: string[] | undefined;
 }
 
 function MessageSkeleton() {
@@ -52,9 +57,13 @@ export function ChatThread({
   runEventsById,
   assistantDrafts,
   streamTarget,
+  assistantName,
+  hasSelectedConversation,
   isAdmin,
   loading,
   onSuggestion,
+  onCreateThread,
+  suggestionChips,
 }: ChatThreadProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -86,6 +95,23 @@ export function ChatThread({
   const hasMessages = messages.length > 0;
   const hasStreamingDraft =
     streamTarget && assistantDrafts[streamTarget.runId] !== undefined;
+  const trimmedAssistantName = assistantName?.trim() ?? "";
+  const hasAssistant = trimmedAssistantName.length > 0;
+  const starterPrompts =
+    suggestionChips && suggestionChips.length > 0
+      ? suggestionChips
+      : SUGGESTION_CHIPS;
+
+  let emptyTitle = "Pick an assistant";
+  let emptyDescription = "Choose an assistant from the left panel to begin.";
+
+  if (hasAssistant && !hasSelectedConversation) {
+    emptyTitle = `Start a conversation with ${trimmedAssistantName}`;
+    emptyDescription = "Create a new thread or choose a starter prompt to begin the demo.";
+  } else if (hasAssistant) {
+    emptyTitle = `Start a conversation with ${trimmedAssistantName}`;
+    emptyDescription = "Send a message below or pick a suggested first question.";
+  }
 
   if (!hasMessages && !hasStreamingDraft) {
     return (
@@ -94,14 +120,24 @@ export function ChatThread({
           <MessageSquare className="h-6 w-6 text-muted-foreground" />
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-medium text-foreground">Start a conversation</p>
+          <p className="text-sm font-medium text-foreground">{emptyTitle}</p>
           <p className="text-xs text-muted-foreground">
-            Send a message below or pick a suggestion.
+            {emptyDescription}
           </p>
         </div>
+        {hasAssistant && !hasSelectedConversation && onCreateThread ? (
+          <Button
+            variant="default"
+            size="sm"
+            className="rounded-full px-4"
+            onClick={onCreateThread}
+          >
+            New thread
+          </Button>
+        ) : null}
         {onSuggestion && (
           <div className="flex flex-wrap justify-center gap-2">
-            {SUGGESTION_CHIPS.map((chip) => (
+            {starterPrompts.map((chip) => (
               <Button
                 key={chip}
                 variant="outline"
@@ -118,6 +154,12 @@ export function ChatThread({
     );
   }
 
+  const assistantRunIds = new Set(
+    messages
+      .filter((message) => message.role === "assistant" && typeof message.run_id === "string")
+      .map((message) => message.run_id as string),
+  );
+
   return (
     <ScrollArea className="h-full">
       <div
@@ -130,6 +172,23 @@ export function ChatThread({
           const run = runId ? runsById[runId] : null;
           const events = runId ? (runEventsById[runId] ?? []) : [];
           const governedAction = run ? extractGovernedActionSummary(events) : null;
+          const showGovernedAction =
+            run && governedAction
+              ? message.role === "assistant" || !assistantRunIds.has(run.id)
+              : false;
+          const failurePresentation =
+            message.role === "user" && run && run.status === "failed" && !assistantRunIds.has(run.id)
+              ? buildRunFailurePresentation({
+                  run,
+                  events,
+                  isAdmin: Boolean(isAdmin),
+                })
+              : null;
+          const showFailurePresentation =
+            Boolean(failurePresentation) &&
+            !(governedAction && governedAction.approvalState === "pending" && governedAction.approvalId);
+          const visibleFailurePresentation = showFailurePresentation ? failurePresentation : null;
+          const failureRunId = failurePresentation && run ? run.id : null;
 
           return (
             <div key={message.id}>
@@ -141,13 +200,26 @@ export function ChatThread({
               {isAdmin && message.role === "assistant" && run && (
                 <RunMetadata run={run} events={events} />
               )}
-              {message.role === "assistant" && run && governedAction && (
+              {showGovernedAction && run && governedAction ? (
                 <GovernedActionCard
                   runId={run.id}
                   summary={governedAction}
                   isAdmin={Boolean(isAdmin)}
                 />
-              )}
+              ) : null}
+              {visibleFailurePresentation && failureRunId ? (
+                <div
+                  data-testid={`chat-run-failure-${failureRunId}`}
+                  className="ml-1 mt-3 max-w-xl rounded-lg border border-destructive/20 bg-destructive/5 p-3"
+                >
+                  <p className="text-xs font-medium uppercase tracking-widest text-destructive">
+                    {visibleFailurePresentation.title}
+                  </p>
+                  <p className="mt-1 text-sm text-foreground">
+                    {visibleFailurePresentation.message}
+                  </p>
+                </div>
+              ) : null}
             </div>
           );
         })}

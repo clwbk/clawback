@@ -9,6 +9,15 @@ import {
   OperatorActionsServiceError,
 } from "./service.js";
 
+function createGatewayClientFactory(handler: (method: string, params: unknown) => unknown | Promise<unknown>) {
+  return () => ({
+    async request<T = Record<string, unknown>>(method: string, params?: unknown) {
+      return await handler(method, params) as T;
+    },
+    async close() {},
+  });
+}
+
 async function createRepoFixture() {
   const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), "clawback-operator-actions-"));
   await fs.writeFile(path.join(repoRoot, "pnpm-workspace.yaml"), "packages:\n  - apps/*\n", "utf8");
@@ -254,5 +263,194 @@ describe("LocalOperatorActionsService", () => {
         409,
       ),
     );
+  });
+
+  it("reports ready runtime status when gateway and provider keys are aligned", async () => {
+    const repoRoot = await createRepoFixture();
+    const service = new LocalOperatorActionsService({
+      enabled: true,
+      repoRoot,
+      env: {
+        ...process.env,
+        OPENAI_API_KEY: "sk-test",
+      },
+      gatewayClientFactory: createGatewayClientFactory(async (method) => {
+        if (method !== "config.get") {
+          throw new Error(`Unexpected method ${method}`);
+        }
+
+        return {
+          value: {
+            mainAgent: {
+              model: {
+                primary: "openai/gpt-4.1-mini",
+              },
+            },
+            agents: {
+              list: [
+                {
+                  id: "cb_agtv_1",
+                  model: {
+                    primary: "openai/gpt-4.1-mini",
+                  },
+                },
+              ],
+            },
+          },
+        };
+      }),
+    });
+
+    await expect(service.getRuntimeReadinessStatus()).resolves.toMatchObject({
+      ok: true,
+      status: "ready",
+      configured_provider: "openai",
+      configured_provider_env_var: "OPENAI_API_KEY",
+      configured_provider_key_present: true,
+      gateway_main_model: "openai/gpt-4.1-mini",
+      gateway_main_provider: "openai",
+      gateway_main_provider_env_var: "OPENAI_API_KEY",
+      gateway_main_provider_key_present: true,
+      published_agent_count: 1,
+    });
+  });
+
+  it("reports blocked runtime status when the gateway expects anthropic without a key", async () => {
+    const repoRoot = await createRepoFixture();
+    const service = new LocalOperatorActionsService({
+      enabled: true,
+      repoRoot,
+      env: {
+        ...process.env,
+        OPENAI_API_KEY: "sk-test",
+      },
+      gatewayClientFactory: createGatewayClientFactory(async (method) => {
+        if (method !== "config.get") {
+          throw new Error(`Unexpected method ${method}`);
+        }
+
+        return {
+          value: {
+            mainAgent: {
+              model: {
+                primary: "anthropic/claude-opus-4-6",
+              },
+            },
+          },
+        };
+      }),
+    });
+
+    await expect(service.getRuntimeReadinessStatus()).resolves.toMatchObject({
+      ok: false,
+      status: "blocked",
+      configured_provider: "openai",
+      configured_provider_env_var: "OPENAI_API_KEY",
+      configured_provider_key_present: true,
+      gateway_main_model: "anthropic/claude-opus-4-6",
+      gateway_main_provider: "anthropic",
+      gateway_main_provider_env_var: "ANTHROPIC_API_KEY",
+      gateway_main_provider_key_present: false,
+      checks: {
+        gateway: {
+          ok: true,
+        },
+        configured_provider_key: {
+          ok: true,
+        },
+        gateway_main_provider_key: {
+          ok: false,
+        },
+      },
+    });
+  });
+
+  it("reports ready runtime status when the configured provider and gateway primary model both use openrouter", async () => {
+    const repoRoot = await createRepoFixture();
+    const service = new LocalOperatorActionsService({
+      enabled: true,
+      repoRoot,
+      env: {
+        ...process.env,
+        OPENCLAW_MODEL_PROVIDER_NAME: "openrouter",
+        OPENROUTER_API_KEY: "sk-or-test",
+      },
+      gatewayClientFactory: createGatewayClientFactory(async (method) => {
+        if (method !== "config.get") {
+          throw new Error(`Unexpected method ${method}`);
+        }
+
+        return {
+          value: {
+            agents: {
+              list: [
+                {
+                  id: "cb_agtv_1",
+                  model: {
+                    primary: "openrouter/openai/gpt-4.1-mini",
+                  },
+                },
+              ],
+            },
+          },
+        };
+      }),
+    });
+
+    await expect(service.getRuntimeReadinessStatus()).resolves.toMatchObject({
+      ok: true,
+      status: "ready",
+      configured_provider: "openrouter",
+      configured_provider_env_var: "OPENROUTER_API_KEY",
+      configured_provider_key_present: true,
+      gateway_main_model: "openrouter/openai/gpt-4.1-mini",
+      gateway_main_provider: "openrouter",
+      gateway_main_provider_env_var: "OPENROUTER_API_KEY",
+      gateway_main_provider_key_present: true,
+      published_agent_count: 1,
+      checks: {
+        gateway: {
+          ok: true,
+        },
+        configured_provider_key: {
+          ok: true,
+        },
+        gateway_main_provider_key: {
+          ok: true,
+        },
+      },
+    });
+  });
+
+  it("reports blocked runtime status when the OpenClaw gateway is unreachable", async () => {
+    const repoRoot = await createRepoFixture();
+    const service = new LocalOperatorActionsService({
+      enabled: true,
+      repoRoot,
+      env: {
+        ...process.env,
+      },
+      gatewayClientFactory: createGatewayClientFactory(async () => {
+        throw new Error("connect ECONNREFUSED 127.0.0.1:18789");
+      }),
+    });
+
+    await expect(service.getRuntimeReadinessStatus()).resolves.toMatchObject({
+      ok: false,
+      status: "blocked",
+      configured_provider: "openai",
+      configured_provider_env_var: "OPENAI_API_KEY",
+      configured_provider_key_present: false,
+      gateway_main_model: null,
+      checks: {
+        gateway: {
+          ok: false,
+        },
+        configured_provider_key: {
+          ok: false,
+        },
+        gateway_main_provider_key: null,
+      },
+    });
   });
 });
