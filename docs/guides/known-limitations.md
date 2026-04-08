@@ -1,6 +1,6 @@
 # Known Limitations
 
-An honest list of what Clawback does not yet do, what is intentionally narrow, and what still requires operator workarounds.
+What Clawback does not yet do, what is limited on purpose, and what still requires operator workarounds.
 
 ## Identity and Account Management
 

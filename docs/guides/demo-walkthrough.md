@@ -8,11 +8,11 @@ workspace or any workspace where access has already been provided.
 
 ## What This Demo Is
 
-The current demo is intentionally bounded.
+The current demo is focused.
 
-It is not trying to prove every possible business workflow at once.
+It is not trying to cover every possible business workflow at once.
 
-It is trying to prove one coherent answer-to-action path:
+It is meant to show one answer-to-action path:
 
 - grounded context from internal docs
 - a useful assistant response
@@ -20,7 +20,7 @@ It is trying to prove one coherent answer-to-action path:
 - a human review boundary before a consequential action
 - durable work and audit state after the run
 
-There are now two honest first paths:
+There are two starting points:
 
 - worker-first admin path through `Setup` and the worker proof rail
 - retrieval-first evaluator path through `Knowledge` and `Incident Copilot`
@@ -55,7 +55,7 @@ If not, use:
 
 - `Run sample activity`
 
-What this proves:
+What to notice:
 
 - a worker can be installed and configured as a durable role
 - a real input can create inbox, work, and activity state
@@ -84,7 +84,7 @@ Inspect:
 - the seeded `Incident Copilot Demo` connector
 - the completed sync job
 
-What this proves:
+What to notice:
 
 - answers can be grounded in a known corpus
 - the no-Google retrieval path is real before live systems are connected
@@ -104,7 +104,7 @@ Ask these prompts in order:
 3. `Draft a follow-up ticket for the team.`
 4. `Go ahead and create the ticket.`
 
-What this proves:
+What to notice:
 
 - the assistant can answer using the seeded knowledge source
 - the response can move toward a concrete operational next step
@@ -118,7 +118,7 @@ Go to:
 - `/workspace/work`
 - `/workspace/activity`
 
-What this proves:
+What to notice:
 
 - retrieval-backed chat can still produce durable work and review state
 - outcome truth remains visible after the conversation ends
@@ -162,22 +162,22 @@ If a friend says "Could this automate my workflow?", the next useful questions a
 
 - what event should trigger the work?
 - what internal docs or records should it see?
-- what should it draft versus actually execute?
+- what should it draft versus execute?
 - what absolutely needs human approval?
 - who should own review?
 - what should show up in `Work` when it is done?
 
 If you can answer those, you can usually sketch a real Clawback flow.
 
-## What The Demo Does Not Yet Prove
+## What The Demo Does Not Cover Yet
 
-This demo does **not** prove:
+This demo does **not** cover:
 
 - every integration is plug-and-play
 - the product already automates every business workflow
 - the current assistant list is the final product taxonomy
 
-It proves the control-plane pattern:
+What it does show:
 
 - grounded assistant
 - reviewable output

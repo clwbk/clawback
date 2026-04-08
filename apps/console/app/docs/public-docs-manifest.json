@@ -1,0 +1,31 @@
+{
+  "base": [
+    { "slug": "start-here", "title": "Start Here" },
+    { "slug": "quickstart", "title": "Quickstart" },
+    { "slug": "getting-started", "title": "Getting Started" },
+    { "slug": "demo-walkthrough", "title": "Demo Walkthrough" },
+    { "slug": "first-run", "title": "First-Run Guide" },
+    { "slug": "deployment", "title": "Deployment" },
+    { "slug": "verification-and-testing", "title": "Verification and Testing" },
+    { "slug": "troubleshooting", "title": "Troubleshooting" },
+    { "slug": "known-limitations", "title": "Known Limitations" },
+    { "slug": "admin-guide", "title": "Admin Guide" },
+    { "slug": "user-guide", "title": "User Guide" },
+    { "slug": "security", "title": "Security Overview" },
+    { "slug": "api-reference", "title": "API Reference" },
+    { "slug": "plugins-and-providers", "title": "Plugins & Providers" },
+    { "slug": "plugin-authoring", "title": "Writing Plugins" },
+    { "slug": "plugin-api-reference", "title": "Plugin API Reference" },
+    { "slug": "plugin-cookbook", "title": "Plugin Cookbook" }
+  ],
+  "publicDemoOnly": [{ "slug": "public-demo", "title": "Public Demo Guide" }],
+  "siteLinkedSlugs": [
+    "start-here",
+    "public-demo",
+    "quickstart",
+    "getting-started",
+    "deployment",
+    "verification-and-testing",
+    "known-limitations"
+  ]
+}

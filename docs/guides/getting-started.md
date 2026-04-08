@@ -1,7 +1,7 @@
 # Getting Started with Clawback
 
-How to understand the current product, choose the right entry path, and get to
-an honest first impression quickly.
+How to understand the current product, choose the right entry path, and get a
+first impression quickly.
 
 **Audience:** First-time evaluators, operators, and contributors.
 
@@ -24,27 +24,21 @@ If you are running a local or self-hosted admin workspace, start with
 [Quickstart](./quickstart.md) instead so you land on the worker-first setup
 path.
 
-## What Clawback Is Actually Promising
+## What Clawback Does
 
-Clawback is a self-hosted AI worker control plane.
+Clawback is a self-hosted platform for AI workers with human review.
 
-The promise is not:
+- Workers can use your internal docs and context
+- Workers can draft or propose actions
+- Reviews gate the actions that matter
+- Work and activity stay visible after the run
 
-- "connect everything and the AI will magically run your business"
+It's strongest when you want:
 
-The promise is:
-
-- workers can use internal context
-- workers can draft or propose actions
-- reviews gate the actions that matter
-- durable work and activity remain visible after the run
-
-That means the product is strongest when you want:
-
-- grounded answers from internal docs
+- answers grounded in internal docs
 - draft generation with human review
 - controlled automation instead of hidden automation
-- visible operational truth after the assistant finishes
+- visible history after the assistant finishes
 
 ## If You Want To Automate XYZ For Your Business
 
@@ -75,7 +69,7 @@ configuration. It is clarifying the workflow.
 
 ## The Fastest Way To Understand The Product
 
-There are now two honest first paths:
+There are two good first paths:
 
 1. **Hosted/public evaluator path**
    - open [Demo Walkthrough](./demo-walkthrough.md)
@@ -86,7 +80,7 @@ There are now two honest first paths:
    - open `/workspace/setup`
    - use `Run sample activity` to reach the worker proof rail
 
-Together, those give the shortest honest answer to:
+Together, these give you the fastest answer to:
 
 - what the product is about
 - what it feels like in use
@@ -133,7 +127,7 @@ For the shortest local setup path, use [Quickstart](./quickstart.md).
 
 These are the most useful pages for first understanding:
 
-- `Setup` for the worker-first activation and proof path
+- `Setup` for the worker-first activation path
 - `Today` for the current workspace state
 - `Inbox` for reviews and items needing attention
 - `Work` for durable outputs
@@ -141,12 +135,11 @@ These are the most useful pages for first understanding:
 - `Knowledge` for grounded retrieval sources
 - `Activity` for audit truth
 
-Those pages now tell two complementary stories: the worker-first setup proof
-and the retrieval-first guided assistant path.
+These pages show two sides of the product: the worker-first setup path and the retrieval-first guided assistant path.
 
 ## Current First-Value Paths
 
-### 1. Worker-first setup proof
+### 1. Worker-first setup path
 
 This is the clearest admin/local first impression:
 
@@ -164,7 +157,7 @@ This is the strongest public evaluator impression:
 
 ### 3. Reviewed email path
 
-This proves the governed-action lane:
+This is the main governed-action lane:
 
 - forwarded email creates work
 - a review gates the send
@@ -180,7 +173,7 @@ Useful scripts:
 
 ### 4. Retrieval path without Gmail
 
-This proves low-trust first value without requiring Google setup:
+This gives you a low-trust first pass without requiring Google setup:
 
 1. open `Knowledge`
 2. inspect the seeded `Incident Copilot Demo` connector
@@ -193,7 +186,7 @@ pnpm smoke:incident-copilot
 pnpm smoke:incident-copilot-action
 ```
 
-## What A Strong First Evaluation Should Prove
+## What You Should Know After A First Evaluation
 
 By the end of a good first run, you should be able to say:
 

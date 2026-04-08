@@ -200,7 +200,7 @@ Read [Known Limitations](./known-limitations.md) before making broader identity 
 
 ## Verification Routine
 
-For a local or self-hosted deployment, the fastest honest admin verification loop is:
+For a local or self-hosted deployment, the fastest admin verification loop is:
 
 ```bash
 pnpm smoke:public-try

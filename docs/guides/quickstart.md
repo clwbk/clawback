@@ -51,7 +51,7 @@ Then sign in as:
 - `dave@hartwell.com`
 - `demo1234`
 
-## Choose a first-run proof
+## Choose a first run
 
 For the new worker-first admin path:
 
@@ -69,7 +69,7 @@ For the retrieval-first no-Google path:
 
 ## What to open first
 
-- `/workspace/setup` for the worker-first activation and proof path
+- `/workspace/setup` for the worker-first setup path
 - `/workspace/workers` to install or inspect workers
 - `/workspace/inbox` to review gated actions and suggestions
 - `/workspace/work` to inspect durable outputs and execution state
@@ -83,7 +83,7 @@ For the retrieval-first no-Google path:
 pnpm smoke:public-try
 ```
 
-This exercises the real ingress and reviewed-send paths. It is the fastest honest check that the local stack is healthy.
+This exercises the ingress and reviewed-send paths. It's the fastest check that the local stack is healthy.
 
 Notes:
 

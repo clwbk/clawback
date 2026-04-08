@@ -1,24 +1,7 @@
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { docsNav, type DocSlug } from "./docs-nav";
-
-const GUIDES_DIR_CANDIDATES = [
-  join(process.cwd(), "docs", "guides"),
-  join(process.cwd(), "..", "..", "docs", "guides"),
-];
-
-async function resolveGuidesDir(): Promise<string | null> {
-  for (const candidate of GUIDES_DIR_CANDIDATES) {
-    try {
-      await access(candidate);
-      return candidate;
-    } catch {
-      // Try the next candidate.
-    }
-  }
-
-  return null;
-}
+import { resolveGuidesDir } from "./public-docs-server";
 
 export async function loadDoc(slug: string): Promise<string | null> {
   const valid = docsNav.some((d) => d.slug === slug);

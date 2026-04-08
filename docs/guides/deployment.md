@@ -4,9 +4,9 @@ How to run Clawback as a public self-hosted single-node deployment.
 
 **Audience:** Operators deploying Clawback on a VM or single host.
 
-## Deployment Posture
+## Supported Setup
 
-The supported deployment shape today is:
+The supported deployment today is:
 
 - self-hosted
 - single node
@@ -131,7 +131,7 @@ deployment path, read [Start Here](./start-here.md) first.
 
 ## Fresh VM Rehearsal
 
-If you want to prove the current single-node deployment path on a fresh
+If you want to rehearse the current single-node deployment path on a fresh
 Ubuntu/Debian VM before doing a real rollout, use the remote rehearsal script
 from your local checkout:
 
@@ -156,13 +156,13 @@ pnpm check:hetzner-deploy
 This bootstraps Docker on the remote host, syncs the current repo snapshot, and
 runs the existing deployed-stack acceptance flow there.
 
-What it proves:
+What you learn from this rehearsal:
 
 - the host can be prepared for the supported Compose deployment
 - the production stack builds and reaches health on a fresh VM
 - seeding and the no-Google public-try path still pass remotely
 
-What it does not prove:
+What it still does not cover:
 
 - TLS / reverse proxy (Caddy is in the compose file but needs a real domain)
 - SMTP-backed reviewed-send delivery
@@ -197,6 +197,29 @@ docker compose -f docker-compose.prod.yml --env-file .env up -d --build
 Use `--skip-rsync` if the remote workspace is already current and you only want
 to restart, or `--no-build` if you explicitly want to reuse the images already
 present on the host.
+
+### If you also deploy `clawback.team`
+
+The public site links visitors into the docs served by the demo/console
+deployment at `https://demo.clawback.team/docs/*`.
+
+Deploy in this order:
+
+1. deploy the demo/console/docs surface
+2. confirm the live docs match this checkout
+3. deploy the site
+
+From your local checkout, run:
+
+```bash
+pnpm check:demo-docs-sync
+```
+
+This compares the local public-docs hash against the live demo endpoint at
+`https://demo.clawback.team/api/docs/version`.
+
+If it fails, redeploy the demo/console surface first. Do not deploy the site
+until the check passes.
 
 ## 5. Verify the Control Plane
 
@@ -334,7 +357,7 @@ CLAWBACK_INBOUND_EMAIL_WEBHOOK_TOKEN=... \
 ./scripts/public-try-verify.sh
 ```
 
-Current honest verifier behavior on a no-SMTP deployment:
+Current verifier behavior on a no-SMTP deployment:
 
 - watched inbox is skipped if Gmail is not connected
 - review approval is skipped if the pending review is `send_email` and SMTP is
@@ -380,7 +403,7 @@ Clawback does not provide automatic backup orchestration yet.
 
 ## 10. Known Limits of This Deployment Shape
 
-This deployment guide is honest to the current product:
+Current limits of this deployment shape:
 
 - single-node only
 - no HA or clustering

@@ -7,15 +7,15 @@ whether to click through the shared demo, clone the repo, or deploy the stack.
 
 ## The Short Version
 
-There are three honest ways to start:
+There are three ways to start:
 
 1. **Use the shared hosted demo**
    - fastest first impression
    - no local setup
-   - intentionally narrow and disposable
+   - limited scope, shared environment
    - use [Public Demo Guide](./public-demo.md)
 2. **Clone the repo and run it locally**
-   - best path if you want to inspect the real product surfaces
+   - best path if you want to see the full product
    - use [Quickstart](./quickstart.md)
 3. **Deploy it on a server**
    - best path if you want a real self-hosted workspace instead of a shared demo
@@ -41,29 +41,17 @@ If you want the full step-by-step path, use [Public Demo Guide](./public-demo.md
 
 ### Pick the shared demo if:
 
-- you want a quick evaluator pass
-- you are okay with a bounded `Incident Copilot` path
-- you do not need your own data or your own workspace
+- you want a quick look
+- you're okay with the `Incident Copilot` path
+- you don't need your own data or workspace
 
-What it proves:
+You'll see: retrieval-backed answers, action handoff with review, and workspace state. You won't see: your own deployment, your own connectors, or broad workflow coverage.
 
-- retrieval-backed answers over a known corpus
-- governed action handoff
-- visible review and workspace state
-
-What it does not prove:
-
-- your own deployment
-- your own users or connectors
-- broad workflow coverage
-
-Next doc:
-
-- [Public Demo Guide](./public-demo.md)
+Next: [Public Demo Guide](./public-demo.md)
 
 ### Pick local clone if:
 
-- you want to inspect the repo and product honestly
+- you want to see the full product
 - you want a private local workspace
 - you may want to contribute or debug
 
@@ -100,14 +88,11 @@ Next docs:
 
 ## With Or Without Cloning The Repo
 
-The honest current answer is:
+- If you want to self-host, the supported path starts from a repo checkout
+- If you only want to try the product, use the shared demo — no clone needed
+- If you're deploying to a remote VM, the **remote host doesn't need its own git checkout** when you deploy from a local checkout with `./scripts/deploy-remote-stack.sh`
 
-- if you want to self-host, the supported path still starts from a repo checkout
-- if you only want to try the product, use the shared demo and do not clone anything
-- if you are deploying to a remote VM, the **remote host does not need its own git checkout**
-  when you deploy from a local checkout with `./scripts/deploy-remote-stack.sh`
-
-That means the current modes are:
+The current modes are:
 
 1. **No clone at all**
    - use the shared hosted demo

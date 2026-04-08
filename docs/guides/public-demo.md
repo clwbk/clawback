@@ -2,10 +2,9 @@
 
 Use this page if you want to try the shared Clawback demo right now.
 
-The hosted demo is intentionally narrow. It is a seeded shared workspace built
-to show one honest path:
+The hosted demo is a seeded shared workspace built to show one path through the product:
 
-- grounded answers over a known corpus
+- answers grounded in known docs
 - a concrete next action
 - review before anything consequential
 - visible state in the workspace after the run
@@ -32,9 +31,7 @@ That gets you into the main public demo path immediately.
 
 ## What You Are Looking At
 
-This is not a blank chatbot.
-
-It is a shared seeded workspace, which means:
+This is a shared seeded workspace, which means:
 
 - `Workers` already has installed worker shapes
 - `Inbox` already has review and route-driven operational work
@@ -42,8 +39,7 @@ It is a shared seeded workspace, which means:
 - `Activity` already has audit history
 - `Knowledge` already has a synced `Incident Copilot Demo` source
 
-The point is to make the control plane visible around the chat, not just the
-chat itself.
+The chat is just one part — the workspace around it (Workers, Inbox, Work, Activity) is the rest of the product.
 
 ## Recommended First Pass
 
@@ -56,7 +52,7 @@ After you sign in, use this prompt sequence:
 
 What you should see:
 
-- a grounded explanation instead of generic model memory
+- an explanation pulled from the seeded docs, not generic model output
 - a concrete recommendation
 - a structured draft
 - a pending review instead of silent execution
@@ -75,27 +71,27 @@ Once you have run the main chat flow, open:
 - `Activity`
 - `Knowledge`
 
-That makes the larger product shape legible:
+This shows the bigger picture:
 
 - the assistant is part of a shared workspace
-- consequential actions create review state
-- outputs and history remain visible after the run
+- actions that matter create review items
+- outputs and history stay visible after the run
 
-## What This Demo Proves
+## What This Demo Shows
 
-- retrieval grounded in a known corpus
-- one governed path from answer to action
+- retrieval grounded in known docs
+- one path from answer to reviewed action
 - visible review state
-- durable workspace state after the run
+- workspace state that persists after the run
 
-## What This Demo Does Not Prove
+## What This Demo Doesn't Cover
 
 - your own deployment
 - your own connectors or users
 - broad workflow coverage
 - a no-code automation builder
 
-If you want to inspect the product more honestly, use one of these instead:
+For a fuller picture, use one of these instead:
 
 - [Quickstart](./quickstart.md) for a local clone
 - [Deployment](./deployment.md) for a dedicated single-node workspace

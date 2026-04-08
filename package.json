@@ -28,6 +28,7 @@
     "test:console:first-run:e2e": "playwright test -c apps/console/playwright.config.ts apps/console/e2e/first-run-acceptance.e2e.ts",
     "test:console:demo-evaluator:e2e": "playwright test -c apps/console/playwright.config.ts apps/console/e2e/public-demo-evaluator.e2e.ts",
     "test:console:demo-admin:e2e": "playwright test -c apps/console/playwright.config.ts apps/console/e2e/worker-demo-proof.e2e.ts",
+    "check:demo-docs-sync": "tsx scripts/check-demo-docs-sync.ts",
     "test:deployed-stack": "./scripts/test-deployed-stack.sh",
     "provision:hetzner": "./scripts/provision-hetzner-rehearsal.sh",
     "check:hetzner-deploy": "./scripts/check-hetzner-deploy-prereqs.sh",
