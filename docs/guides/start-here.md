@@ -21,6 +21,22 @@ There are three honest ways to start:
    - best path if you want a real self-hosted workspace instead of a shared demo
    - use [Deployment](./deployment.md)
 
+## Fastest Shared-Demo Path
+
+If you want the shortest possible first pass, use the hosted demo:
+
+- URL: `https://demo.clawback.team`
+- email: `evaluator@hartwell.com`
+- password: `publicdemo1`
+
+Then:
+
+1. open `Chat`
+2. select `Incident Copilot`
+3. ask `Why did checkout fail last night?`
+
+If you want the full step-by-step path, use [Public Demo Guide](./public-demo.md).
+
 ## Which Path Should You Pick?
 
 ### Pick the shared demo if:

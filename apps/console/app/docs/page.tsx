@@ -6,7 +6,7 @@ export default function DocsIndex() {
   const demoGuideHref = isPublicDemoMode ? "/docs/public-demo" : "/docs/demo-walkthrough";
   const demoGuideTitle = isPublicDemoMode ? "Public Demo Guide" : "Demo Walkthrough";
   const demoGuideBody = isPublicDemoMode
-    ? "The hosted-demo path for general sharing. It gives the evaluator login, the recommended route, and the clean admin fallback for trusted walkthroughs."
+    ? "Use this if you want to log into the shared demo right away. It gives you the public evaluator login, the first prompts to try, and the separate admin path for trusted walkthroughs."
     : "The fastest path for a friend or evaluator. It tells you exactly what to click, what to ask, and what each step proves.";
 
   return (
